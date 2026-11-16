@@ -49,7 +49,7 @@ window.ADS = {
   }
 };
 
-window.POPULAR = ['qr-code-generator', 'word-counter', 'json-formatter', 'image-compressor'];
+window.POPULAR = ['qr-code-generator', 'file-translator', 'word-counter', 'json-formatter', 'image-compressor'];
 
 /* Tools — in the same order as the home page grid */
 window.TOOLS = [
@@ -499,6 +499,27 @@ window.TOOLS = [
       ['Can I generate numbers without duplicates?', 'Yes. Check "Unique Only" to ensure every generated number in the batch is distinct.'],
       ['Can I access this via /tools/rng?', 'Yes, /tools/rng and /tools/random-number-generator both open this tool directly.']
     ]
+  },
+  {
+    slug: 'file-translator', name: 'File Translator (Dokumen & Subtitle)', cat: 'text', label: 'Multi-Language', icon: 'globe', ad: 'privacy',
+    desc: 'Translate text files, documents, Markdown, subtitles (SRT/VTT), and JSON between 20+ languages with format preservation.',
+    intro: 'Translate TXT, Markdown (.md), Subtitles (.srt, .vtt), JSON, and document files instantly between over 20 languages while keeping formatting and timestamps intact.',
+    keywords: 'translate translite translator file dokumen subtitle srt vtt language penerjemah',
+    formats: ['Plain Text (.txt)', 'Markdown (.md)', 'Subtitles (.srt, .vtt)', 'JSON (.json)', 'CSV / Code'],
+    related: ['word-counter', 'case-converter', 'markdown-to-html'],
+    howto: [
+      ['Upload or Paste File', 'Drag & drop any text, subtitle, or document file, or paste your text directly.'],
+      ['Select Languages', 'Choose your source and target languages (Indonesian, English, Japanese, Arabic, etc.).'],
+      ['Translate & Download', 'Click Translate File, review the preview, then copy or download the translated document.']
+    ],
+    features: ['Direct drag & drop for TXT, MD, SRT, VTT, JSON, and CSV files', 'Over 20 global languages with auto-detect support', 'Smart Subtitle Mode: preserves SRT/VTT timestamps while translating dialogue', 'Automatic chunking for long documents with real-time progress indicator', 'Side-by-side original and translated preview', 'One-click copy and file download keeping original file format'],
+    privacy: 'Your files are processed directly in your browser. Translations use secure HTTPS requests without storing your files.',
+    uses: ['Translating movie and video subtitle files (.srt, .vtt) without breaking timecodes.', 'Localizing README files, software documentation, and Markdown guides.', 'Translating business letters, articles, essays, and notes to other languages.', 'Converting JSON language locale files for web development.'],
+    faq: [
+      ['Which file formats are supported?', 'You can upload .txt, .md, .srt, .vtt, .json, .csv, or any plain text document.'],
+      ['Will subtitle timestamps be preserved?', 'Yes! When translating .srt or .vtt files, the timing markers and line indices remain completely intact.'],
+      ['Is there a file size limit?', 'Documents are automatically chunked into manageable paragraphs so even long essays or full subtitles translate smoothly.']
+    ]
   }
 ];
 
@@ -506,4 +527,9 @@ window.TOOL_MAP = {};
 window.TOOLS.forEach(function (t) { window.TOOL_MAP[t.slug] = t; });
 if (window.TOOL_MAP['random-number-generator']) {
   window.TOOL_MAP['rng'] = window.TOOL_MAP['random-number-generator'];
+}
+if (window.TOOL_MAP['file-translator']) {
+  window.TOOL_MAP['translate-file'] = window.TOOL_MAP['file-translator'];
+  window.TOOL_MAP['translite-file'] = window.TOOL_MAP['file-translator'];
+  window.TOOL_MAP['translate'] = window.TOOL_MAP['file-translator'];
 }

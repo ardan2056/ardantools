@@ -1047,5 +1047,392 @@
     rollDice();
   };
 
+  /* ---------------- File Translator (Documents, Subtitles & Text) ---------------- */
+  var TL_LANGUAGES = [
+    { code: 'auto', name: '🌐 Detect Language' },
+    { code: 'id', name: '🇮🇩 Indonesian (Bahasa Indonesia)' },
+    { code: 'en', name: '🇺🇸 English' },
+    { code: 'ja', name: '🇯🇵 Japanese (日本語)' },
+    { code: 'ko', name: '🇰🇷 Korean (한국어)' },
+    { code: 'ar', name: '🇸🇦 Arabic (العربية)' },
+    { code: 'zh-CN', name: '🇨🇳 Chinese Simplified (简体中文)' },
+    { code: 'zh-TW', name: '🇹🇼 Chinese Traditional (繁體中文)' },
+    { code: 'es', name: '🇪🇸 Spanish (Español)' },
+    { code: 'fr', name: '🇫🇷 French (Français)' },
+    { code: 'de', name: '🇩🇪 German (Deutsch)' },
+    { code: 'ru', name: '🇷🇺 Russian (Русский)' },
+    { code: 'pt', name: '🇧🇷 Portuguese (Português)' },
+    { code: 'it', name: '🇮🇹 Italian (Italiano)' },
+    { code: 'nl', name: '🇳🇱 Dutch (Nederlands)' },
+    { code: 'tr', name: '🇹🇷 Turkish (Türkçe)' },
+    { code: 'th', name: '🇹🇭 Thai (ไทย)' },
+    { code: 'vi', name: '🇻🇳 Vietnamese (Tiếng Việt)' },
+    { code: 'hi', name: '🇮🇳 Hindi (हिन्दी)' },
+    { code: 'ms', name: '🇲🇾 Malay (Bahasa Melayu)' },
+    { code: 'jw', name: '🇮🇩 Javanese (Basa Jawa)' },
+    { code: 'su', name: '🇮🇩 Sundanese (Basa Sunda)' }
+  ];
+
+  async function translateSingleChunk(str, from, to) {
+    if (!str || !str.trim()) return str;
+    try {
+      var url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + encodeURIComponent(from) + '&tl=' + encodeURIComponent(to) + '&dt=t';
+      var res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'q=' + encodeURIComponent(str)
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var data = await res.json();
+      if (data && data[0]) {
+        return data[0].map(function (x) { return x[0]; }).join('');
+      }
+    } catch (err) {
+      console.warn('Google translate API fallback:', err);
+      try {
+        var f = (from === 'auto' ? 'en' : from);
+        var mmUrl = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(str.substring(0, 500)) + '&langpair=' + f + '|' + to;
+        var mmRes = await fetch(mmUrl);
+        var mmData = await mmRes.json();
+        if (mmData && mmData.responseData && mmData.responseData.translatedText) {
+          return mmData.responseData.translatedText;
+        }
+      } catch (e2) {}
+    }
+    return str;
+  }
+
+  async function translateSubtitleText(text, from, to, onProgress) {
+    var blocks = text.trim().split(/\r?\n\r?\n+/);
+    var parsed = blocks.map(function (b) {
+      var lines = b.split(/\r?\n/);
+      var timeIdx = lines.findIndex(function (l) { return l.indexOf('-->') >= 0; });
+      if (timeIdx === -1) return { header: [], text: lines.join('\n'), raw: b };
+      return {
+        header: lines.slice(0, timeIdx + 1),
+        text: lines.slice(timeIdx + 1).join('\n')
+      };
+    });
+
+    var SEP = '[[[SEP]]]';
+    var batches = [];
+    var curBatch = [];
+    var curLen = 0;
+
+    for (var i = 0; i < parsed.length; i++) {
+      var item = parsed[i];
+      var len = item.text.length + SEP.length + 2;
+      if (curLen + len > 1500 && curBatch.length > 0) {
+        batches.push(curBatch);
+        curBatch = [item];
+        curLen = item.text.length;
+      } else {
+        curBatch.push(item);
+        curLen += len;
+      }
+    }
+    if (curBatch.length) batches.push(curBatch);
+
+    var total = batches.length;
+    for (var b = 0; b < total; b++) {
+      if (onProgress) onProgress(b, total);
+      var batch = batches[b];
+      var combined = batch.map(function (it) { return it.text || ' '; }).join('\n' + SEP + '\n');
+      var transCombined = await translateSingleChunk(combined, from, to);
+      var parts = transCombined.split(/\r?\n?\s*\[\[\[SEP\]\]\]\s*\r?\n?/);
+      for (var k = 0; k < batch.length; k++) {
+        batch[k].trans = (parts[k] || batch[k].text).trim();
+      }
+    }
+    if (onProgress) onProgress(total, total);
+
+    return parsed.map(function (p) {
+      if (p.raw && !p.header.length) return p.trans || p.raw;
+      return p.header.concat([p.trans || p.text]).join('\n');
+    }).join('\n\n');
+  }
+
+  async function translateJsonText(text, from, to, onProgress) {
+    var obj = JSON.parse(text);
+    async function recurse(val) {
+      if (typeof val === 'string') return await translateSingleChunk(val, from, to);
+      if (Array.isArray(val)) {
+        var arr = [];
+        for (var i = 0; i < val.length; i++) arr.push(await recurse(val[i]));
+        return arr;
+      }
+      if (typeof val === 'object' && val !== null) {
+        var res = {};
+        for (var k in val) {
+          if (Object.prototype.hasOwnProperty.call(val, k)) res[k] = await recurse(val[k]);
+        }
+        return res;
+      }
+      return val;
+    }
+    if (onProgress) onProgress(1, 2);
+    var translatedObj = await recurse(obj);
+    if (onProgress) onProgress(2, 2);
+    return JSON.stringify(translatedObj, null, 2);
+  }
+
+  async function translateGeneralDocument(text, from, to, onProgress) {
+    var paragraphs = text.split(/\r?\n\r?\n/);
+    var chunks = [], cur = '';
+    for (var i = 0; i < paragraphs.length; i++) {
+      var p = paragraphs[i];
+      if ((cur + '\n\n' + p).length > 1500) {
+        if (cur) chunks.push(cur);
+        cur = p;
+      } else {
+        cur = cur ? cur + '\n\n' + p : p;
+      }
+    }
+    if (cur) chunks.push(cur);
+
+    var res = [];
+    var total = chunks.length;
+    for (var c = 0; c < total; c++) {
+      if (onProgress) onProgress(c, total);
+      var translated = await translateSingleChunk(chunks[c], from, to);
+      res.push(translated);
+    }
+    if (onProgress) onProgress(total, total);
+    return res.join('\n\n');
+  }
+
+  IMPL['file-translator'] = IMPL['translate-file'] = IMPL['translite-file'] = function (root) {
+    var loadedFileName = 'document.txt';
+    var loadedExt = '.txt';
+
+    var SAMPLE_DOC =
+      '# Welcome to Ardan Tools File Translator\n\n' +
+      'Translate full documents, Markdown guides, subtitle files (.srt, .vtt), and JSON data instantly.\n\n' +
+      '### Key Capabilities:\n' +
+      '- Preserves timestamps when translating subtitle files\n' +
+      '- Retains Markdown syntax like headers, lists, and links\n' +
+      '- 100% free and fast in-browser translation';
+
+    var SAMPLE_SRT =
+      '1\n00:00:01,000 --> 00:00:04,500\nHello everyone, welcome back to our channel!\n\n' +
+      '2\n00:00:05,000 --> 00:00:08,200\nIn this video, we will show you how to build modern web tools.\n\n' +
+      '3\n00:00:09,000 --> 00:00:12,000\nMake sure to subscribe and enjoy the video!';
+
+    root.innerHTML =
+      '<div id="tlDropArea" style="margin-bottom:18px"></div>' +
+      '<div class="panel-row" style="gap:12px;margin-bottom:14px;flex-wrap:wrap;align-items:center">' +
+        '<div><label class="field-label" style="display:block;font-size:12px;font-weight:700;margin-bottom:4px">From Language</label>' +
+        '<select id="tlFrom" class="input" style="font-weight:600">' +
+          TL_LANGUAGES.map(function (l) { return '<option value="' + l.code + '">' + l.name + '</option>'; }).join('') +
+        '</select></div>' +
+        '<button class="btn btn-ghost" id="tlSwap" title="Swap languages" style="align-self:flex-end;margin-bottom:2px;font-size:18px;padding:8px 12px">⇄</button>' +
+        '<div><label class="field-label" style="display:block;font-size:12px;font-weight:700;margin-bottom:4px">To Language</label>' +
+        '<select id="tlTo" class="input" style="font-weight:600">' +
+          TL_LANGUAGES.filter(function (l) { return l.code !== 'auto'; }).map(function (l) {
+            return '<option value="' + l.code + '"' + (l.code === 'id' ? ' selected' : '') + '>' + l.name + '</option>';
+          }).join('') +
+        '</select></div>' +
+        '<span class="spacer"></span>' +
+        '<span class="pill pill-green" id="tlFormatBadge" style="align-self:flex-end;margin-bottom:4px">' + icon('file', 'icon-sm') + '<span id="tlFormatText">Text File</span></span>' +
+        '<button class="btn btn-primary btn-lg" id="tlTransBtn" style="align-self:flex-end;margin-bottom:2px">' + icon('globe') + 'Translate File</button>' +
+      '</div>' +
+
+      /* Progress Bar */
+      '<div id="tlProgressBox" style="display:none;margin-bottom:16px;background:var(--surface-2);padding:12px 16px;border-radius:12px;border:1px solid var(--border)">' +
+        '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:6px"><span id="tlProgressLabel">Translating...</span><span id="tlProgressPct">0%</span></div>' +
+        '<div class="progress"><span id="tlProgressBar" style="width:0%"></span></div>' +
+      '</div>' +
+
+      /* Split View */
+      '<div class="md-split">' +
+        '<div>' +
+          '<div class="panel-head">' +
+            '<span class="panel-title" id="tlInTitle">' + icon('file', 'icon-sm') + 'Original Content</span>' +
+            '<span class="toolbar">' +
+              '<button class="btn btn-sm" id="tlSampleText">' + icon('sparkles', 'icon-sm') + 'Sample Doc</button>' +
+              '<button class="btn btn-sm" id="tlSampleSrt">Sample Subtitle (.srt)</button>' +
+              '<button class="btn btn-sm btn-danger" id="tlClear">' + icon('trash', 'icon-sm') + 'Clear</button>' +
+            '</span>' +
+          '</div>' +
+          '<textarea class="editor" id="tlInput" placeholder="Paste text here or drag & drop any file (.txt, .md, .srt, .vtt, .json, .csv)…" spellcheck="false" style="white-space:pre-wrap"></textarea>' +
+          '<div class="meta" id="tlInMeta" style="margin-top:6px">0 characters · 0 words</div>' +
+        '</div>' +
+        '<div>' +
+          '<div class="panel-head">' +
+            '<span class="panel-title">' + icon('checkCircle', 'icon-sm') + 'Translated Output</span>' +
+            '<span class="toolbar">' +
+              '<button class="btn btn-sm" id="tlCopy">' + icon('copy', 'icon-sm') + 'Copy Text</button>' +
+              '<button class="btn btn-sm btn-primary" id="tlDownload">' + icon('download', 'icon-sm') + 'Download File</button>' +
+            '</span>' +
+          '</div>' +
+          '<textarea class="editor" id="tlOutput" placeholder="Translated text will appear here. You can edit it directly before downloading…" spellcheck="false" style="white-space:pre-wrap"></textarea>' +
+          '<div class="meta" id="tlOutMeta" style="margin-top:6px">Ready to translate</div>' +
+        '</div>' +
+      '</div>';
+
+    var dz = F.dropzone({
+      accept: '.txt,.md,.srt,.vtt,.json,.csv,.html,.xml',
+      maxFiles: 1,
+      compact: true,
+      title: 'Drop a document, subtitle, or data file here',
+      sub: 'Supports .txt, .md, .srt, .vtt, .json, .csv (or type/paste below)',
+      onFiles: function (files) {
+        var f = files[0];
+        if (!f) return;
+        loadedFileName = f.name;
+        var dot = f.name.lastIndexOf('.');
+        loadedExt = dot >= 0 ? f.name.slice(dot).toLowerCase() : '.txt';
+
+        F.readText(f).then(function (content) {
+          input.value = content;
+          updateFormat();
+          F.toast('Loaded ' + f.name);
+        }).catch(function (e) {
+          F.toast('Could not read file: ' + e.message, 'error');
+        });
+      }
+    });
+    F.$('#tlDropArea', root).appendChild(dz);
+
+    var input = F.$('#tlInput', root);
+    var output = F.$('#tlOutput', root);
+    var selFrom = F.$('#tlFrom', root);
+    var selTo = F.$('#tlTo', root);
+    var btnTrans = F.$('#tlTransBtn', root);
+    var btnSwap = F.$('#tlSwap', root);
+    var formatText = F.$('#tlFormatText', root);
+    var progBox = F.$('#tlProgressBox', root);
+    var progBar = F.$('#tlProgressBar', root);
+    var progPct = F.$('#tlProgressPct', root);
+    var progLabel = F.$('#tlProgressLabel', root);
+    var inMeta = F.$('#tlInMeta', root);
+    var outMeta = F.$('#tlOutMeta', root);
+
+    function updateFormat() {
+      var v = input.value;
+      var chars = v.length;
+      var words = (v.match(/[\p{L}\p{N}]+/gu) || []).length;
+      inMeta.textContent = chars.toLocaleString() + ' characters · ' + words.toLocaleString() + ' words · File: ' + loadedFileName;
+
+      var isSrt = /-->/m.test(v) && (/^\d+\s*[\r\n]+\d{2}:\d{2}:\d{2}/m.test(v) || /^WEBVTT/m.test(v));
+      var isJson = loadedExt === '.json' || (/^\s*[\{\[]/.test(v) && /[\}\]]\s*$/.test(v));
+      var isMd = loadedExt === '.md' || /^#+\s+/m.test(v);
+
+      if (isSrt) formatText.textContent = 'Subtitle (' + (loadedExt === '.vtt' ? 'VTT' : 'SRT') + ' - Timestamps Preserved)';
+      else if (isJson) formatText.textContent = 'JSON Data (Keys Preserved)';
+      else if (isMd) formatText.textContent = 'Markdown Document';
+      else formatText.textContent = 'Text Document (' + loadedExt + ')';
+    }
+
+    input.addEventListener('input', updateFormat);
+
+    btnSwap.onclick = function () {
+      var f = selFrom.value, t = selTo.value;
+      if (f === 'auto') {
+        F.toast('Cannot swap when source is Auto Detect', 'error');
+        return;
+      }
+      selFrom.value = t;
+      selTo.value = f;
+      F.toast('Languages swapped');
+    };
+
+    F.$('#tlSampleText', root).onclick = function () {
+      loadedFileName = 'sample_guide.md';
+      loadedExt = '.md';
+      input.value = SAMPLE_DOC;
+      updateFormat();
+      F.toast('Loaded sample markdown document');
+    };
+
+    F.$('#tlSampleSrt', root).onclick = function () {
+      loadedFileName = 'sample_subtitles.srt';
+      loadedExt = '.srt';
+      input.value = SAMPLE_SRT;
+      updateFormat();
+      F.toast('Loaded sample subtitle (.srt)');
+    };
+
+    F.$('#tlClear', root).onclick = function () {
+      input.value = '';
+      output.value = '';
+      loadedFileName = 'document.txt';
+      loadedExt = '.txt';
+      updateFormat();
+      outMeta.textContent = 'Ready to translate';
+    };
+
+    btnTrans.onclick = async function () {
+      var text = input.value.trim();
+      if (!text) return F.toast('Please enter text or upload a file first', 'error');
+
+      var from = selFrom.value;
+      var to = selTo.value;
+      if (from === to && from !== 'auto') {
+        return F.toast('Source and target languages are the same', 'error');
+      }
+
+      btnTrans.disabled = true;
+      btnTrans.innerHTML = '<span class="spinner"></span>Translating…';
+      progBox.style.display = '';
+      progBar.style.width = '0%';
+      progPct.textContent = '0%';
+      progLabel.textContent = 'Starting translation…';
+
+      function onProgress(cur, total) {
+        var pct = total ? Math.round((cur / total) * 100) : 0;
+        progBar.style.width = pct + '%';
+        progPct.textContent = pct + '%';
+        progLabel.textContent = 'Translating chunk ' + cur + ' of ' + total + ' (' + pct + '%)…';
+      }
+
+      try {
+        var isSrt = /-->/m.test(text) && (/^\d+\s*[\r\n]+\d{2}:\d{2}:\d{2}/m.test(text) || /^WEBVTT/m.test(text));
+        var isJson = loadedExt === '.json' || (/^\s*\{/.test(text) && /\}\s*$/.test(text));
+
+        var result = '';
+        if (isSrt) {
+          result = await translateSubtitleText(text, from, to, onProgress);
+        } else if (isJson) {
+          try {
+            result = await translateJsonText(text, from, to, onProgress);
+          } catch (e) {
+            result = await translateGeneralDocument(text, from, to, onProgress);
+          }
+        } else {
+          result = await translateGeneralDocument(text, from, to, onProgress);
+        }
+
+        output.value = result;
+        outMeta.textContent = 'Done! ' + result.length.toLocaleString() + ' characters · Target: ' + to.toUpperCase();
+        F.toast('Translation completed successfully!');
+      } catch (err) {
+        console.error('Translation error:', err);
+        F.toast('Translation failed: ' + err.message, 'error');
+      } finally {
+        btnTrans.disabled = false;
+        btnTrans.innerHTML = icon('globe') + 'Translate File';
+        setTimeout(function () { progBox.style.display = 'none'; }, 2000);
+      }
+    };
+
+    F.$('#tlCopy', root).onclick = function () {
+      if (!output.value) return F.toast('No translated text to copy', 'error');
+      F.copyText(output.value, 'Translated text copied');
+    };
+
+    F.$('#tlDownload', root).onclick = function () {
+      var val = output.value;
+      if (!val) return F.toast('No translated file to download', 'error');
+      var dot = loadedFileName.lastIndexOf('.');
+      var base = dot >= 0 ? loadedFileName.slice(0, dot) : loadedFileName;
+      var outName = base + '_' + selTo.value + loadedExt;
+      F.download(new Blob([val], { type: 'text/plain;charset=utf-8' }), outName);
+    };
+
+    input.value = SAMPLE_DOC;
+    updateFormat();
+  };
+
   window.FT._text = { minifyCSS: minifyCSS, beautifyCSS: beautifyCSS, minifyHTML: minifyHTML, beautifyHTML: beautifyHTML, parseCSV: parseCSV, CASES: CASES };
 })();
