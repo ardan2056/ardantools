@@ -49,7 +49,7 @@ window.ADS = {
   }
 };
 
-window.POPULAR = ['qr-code-generator', 'file-translator', 'word-counter', 'json-formatter', 'image-compressor'];
+window.POPULAR = ['hd-photo-enhancer', 'file-translator', 'qr-code-generator', 'word-counter', 'json-formatter', 'image-compressor'];
 
 /* Tools — in the same order as the home page grid */
 window.TOOLS = [
@@ -521,6 +521,27 @@ window.TOOLS = [
       ['Will subtitle timestamps be preserved?', 'Yes! When translating .srt or .vtt files, the timing markers and line indices remain completely intact.'],
       ['Is there a file size limit?', 'Documents are automatically chunked into manageable paragraphs so even long essays or full subtitles translate smoothly.']
     ]
+  },
+  {
+    slug: 'hd-photo-enhancer', name: 'HD Photo Enhancer (Pembuat Foto HD & 4K)', cat: 'image', label: 'Ultra HD 4K', icon: 'sparkles', ad: 'creative',
+    desc: 'Enhance blurry photos to Ultra HD, upscale resolution up to 4x, unblur facial details, and restore colors in your browser.',
+    intro: 'Transform low-resolution, blurry, or old photos into crystal-clear High Definition (Full HD & 4K). Unblur edges, boost clarity, denoise, and upscale up to 4x with an interactive before/after split slider.',
+    keywords: 'hd photo enhancer pembuat foto hd jernih unblur upscale 4k resolution super resolution gambar penjernih',
+    formats: ['JPEG (.jpg, .jpeg)', 'PNG (.png)', 'WebP (.webp)', 'HEIC', 'BMP'],
+    related: ['image-compressor', 'image-resizer', 'png-to-jpg'],
+    howto: [
+      ['Upload Photo', 'Drag & drop any low-res or blurry photo (.jpg, .png, .webp).'],
+      ['Choose Preset or Scale', 'Select Auto HD, Face Portrait, Landscape 4K, or customize sliders.'],
+      ['Compare & Download', 'Swipe the Before/After slider to see the HD difference, then download as PNG or JPG.']
+    ],
+    features: ['Multi-scale upscaling (2x Full HD, 4x Ultra HD 4K, 1x Clarity Only)', 'Smart Unsharp Mask algorithm to restore blurry details, hair, eyes, and edges', 'Adaptive Micro-Contrast & Clarity enhancement for punchy depth', 'Noise & JPEG compression artifact suppression', 'Intelligent Vibrance and color restoration without oversaturating skin tones', 'Interactive Before / After comparison slider in real-time', 'One-click presets: Auto HD, Portrait/Face, Landscape 4K, Document Text', '100% private in-browser canvas processing (no photos sent to any server)'],
+    privacy: 'Your photos never leave your device. All upscaling, sharpening, and color enhancements run 100% client-side in your browser using HTML5 Canvas.',
+    uses: ['Making old or blurry smartphone photos crisp and clear in HD.', 'Enhancing anime, wallpapers, and digital art to 4K resolution.', 'Sharpening profile pictures, portraits, and product photos for social media & eCommerce.', 'Unblurring text and details on scanned documents and receipts.'],
+    faq: [
+      ['How does the HD Photo Enhancer work?', 'It combines stepped multi-pass bicubic upsampling, unsharp mask kernel sharpening, micro-contrast enhancement, and noise filtering directly in your browser memory.'],
+      ['What resolution can I achieve?', 'You can upscale 2x (Full HD) or 4x (Ultra HD / 4K), significantly increasing pixel dimensions and fine edge clarity.'],
+      ['Are my photos private?', 'Yes! Zero server uploads. Everything is processed directly on your laptop/phone GPU and CPU.']
+    ]
   }
 ];
 
@@ -535,4 +556,12 @@ if (window.TOOL_MAP['file-translator']) {
   window.TOOL_MAP['translate'] = window.TOOL_MAP['file-translator'];
   window.TOOL_MAP['translate-pdf'] = window.TOOL_MAP['file-translator'];
   window.TOOL_MAP['pdf-translator'] = window.TOOL_MAP['file-translator'];
+}
+if (window.TOOL_MAP['hd-photo-enhancer']) {
+  window.TOOL_MAP['pembuat-foto-hd'] = window.TOOL_MAP['hd-photo-enhancer'];
+  window.TOOL_MAP['foto-hd'] = window.TOOL_MAP['hd-photo-enhancer'];
+  window.TOOL_MAP['photo-hd'] = window.TOOL_MAP['hd-photo-enhancer'];
+  window.TOOL_MAP['hd-photo'] = window.TOOL_MAP['hd-photo-enhancer'];
+  window.TOOL_MAP['penjernih-foto'] = window.TOOL_MAP['hd-photo-enhancer'];
+  window.TOOL_MAP['upscale-image'] = window.TOOL_MAP['hd-photo-enhancer'];
 }

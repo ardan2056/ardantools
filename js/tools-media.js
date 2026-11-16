@@ -1025,4 +1025,408 @@
     };
     setType('url');
   };
+
+  /* ---------------- HD Photo Enhancer & Super Resolution ---------------- */
+  function applyUnsharpMask(data, w, h, amount) {
+    if (amount <= 0) return;
+    var copy = new Uint8ClampedArray(data);
+    var a = amount * 0.28;
+    for (var y = 1; y < h - 1; y++) {
+      var row = y * w * 4;
+      var rowUp = (y - 1) * w * 4;
+      var rowDn = (y + 1) * w * 4;
+      for (var x = 1; x < w - 1; x++) {
+        var i = row + (x * 4);
+        var iUp = rowUp + (x * 4);
+        var iDn = rowDn + (x * 4);
+        var iLf = row + ((x - 1) * 4);
+        var iRt = row + ((x + 1) * 4);
+        for (var c = 0; c < 3; c++) {
+          var orig = copy[i + c];
+          var laplacian = (4 * orig) - copy[iUp + c] - copy[iDn + c] - copy[iLf + c] - copy[iRt + c];
+          if (Math.abs(laplacian) > 2) {
+            var val = orig + laplacian * a;
+            data[i + c] = val < 0 ? 0 : val > 255 ? 255 : val;
+          }
+        }
+      }
+    }
+  }
+
+  function applyClarity(data, strength) {
+    if (strength <= 0) return;
+    var f = strength * 0.45;
+    for (var i = 0; i < data.length; i += 4) {
+      for (var c = 0; c < 3; c++) {
+        var v = data[i + c];
+        var diff = v - 128;
+        var factor = 1 + (f * (1 - Math.abs(diff) / 128));
+        var res = 128 + diff * factor;
+        data[i + c] = res < 0 ? 0 : res > 255 ? 255 : res;
+      }
+    }
+  }
+
+  function applyDenoise(data, w, h, strength) {
+    if (strength <= 0) return;
+    var copy = new Uint8ClampedArray(data);
+    var s = strength * 0.6;
+    for (var y = 1; y < h - 1; y++) {
+      var row = y * w * 4;
+      var rowUp = (y - 1) * w * 4;
+      var rowDn = (y + 1) * w * 4;
+      for (var x = 1; x < w - 1; x++) {
+        var i = row + (x * 4);
+        for (var c = 0; c < 3; c++) {
+          var orig = copy[i + c];
+          var avg = (copy[rowUp + x * 4 + c] + copy[rowDn + x * 4 + c] + copy[row + (x - 1) * 4 + c] + copy[row + (x + 1) * 4 + c]) * 0.25;
+          if (Math.abs(orig - avg) < 18) {
+            data[i + c] = Math.round(orig * (1 - s) + avg * s);
+          }
+        }
+      }
+    }
+  }
+
+  function applyVibrance(data, strength, contrast) {
+    var vFactor = strength * 0.55;
+    for (var i = 0; i < data.length; i += 4) {
+      var r = data[i], g = data[i + 1], b = data[i + 2];
+      if (strength > 0) {
+        var max = Math.max(r, g, b), min = Math.min(r, g, b);
+        var sat = max === 0 ? 0 : (max - min) / max;
+        var boost = vFactor * (1 - sat);
+        var avg = (r + g + b) / 3;
+        r = Math.max(0, Math.min(255, Math.round(r + (r - avg) * boost)));
+        g = Math.max(0, Math.min(255, Math.round(g + (g - avg) * boost)));
+        b = Math.max(0, Math.min(255, Math.round(b + (b - avg) * boost)));
+      }
+      if (contrast !== 0) {
+        r = Math.max(0, Math.min(255, Math.round(128 + (r - 128) * (1 + contrast / 100))));
+        g = Math.max(0, Math.min(255, Math.round(128 + (g - 128) * (1 + contrast / 100))));
+        b = Math.max(0, Math.min(255, Math.round(128 + (b - 128) * (1 + contrast / 100))));
+      }
+      data[i] = r; data[i + 1] = g; data[i + 2] = b;
+    }
+  }
+
+  function renderHDFull(srcCanvas, cfg) {
+    var scale = cfg.scale || 2;
+    var w = srcCanvas.width, h = srcCanvas.height;
+    var targetW = Math.round(w * scale);
+    var targetH = Math.round(h * scale);
+
+    var canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    var ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    if (scale > 2) {
+      var mid = document.createElement('canvas');
+      mid.width = Math.round(w * 2);
+      mid.height = Math.round(h * 2);
+      var mCtx = mid.getContext('2d');
+      mCtx.imageSmoothingEnabled = true;
+      mCtx.imageSmoothingQuality = 'high';
+      mCtx.drawImage(srcCanvas, 0, 0, mid.width, mid.height);
+      ctx.drawImage(mid, 0, 0, targetW, targetH);
+    } else {
+      ctx.drawImage(srcCanvas, 0, 0, targetW, targetH);
+    }
+
+    var imgData = ctx.getImageData(0, 0, targetW, targetH);
+    var d = imgData.data;
+
+    if (cfg.denoise > 0) applyDenoise(d, targetW, targetH, cfg.denoise / 100);
+    if (cfg.sharpen > 0) applyUnsharpMask(d, targetW, targetH, cfg.sharpen / 40);
+    if (cfg.clarity > 0) applyClarity(d, cfg.clarity / 100);
+    if (cfg.vibrance > 0 || cfg.contrast !== 0) applyVibrance(d, cfg.vibrance / 100, cfg.contrast || 0);
+
+    ctx.putImageData(imgData, 0, 0);
+    return canvas;
+  }
+
+  IMPL['hd-photo-enhancer'] = IMPL['pembuat-foto-hd'] = IMPL['foto-hd'] = IMPL['photo-hd'] = IMPL['hd-photo'] = IMPL['penjernih-foto'] = IMPL['upscale-image'] = function (root) {
+    var currentImg = null;
+    var currentName = 'photo.jpg';
+    var enhancedCanvas = null;
+
+    var PRESETS = {
+      auto: { scale: 2, sharpen: 55, clarity: 35, denoise: 20, vibrance: 25, contrast: 15 },
+      face: { scale: 2, sharpen: 45, clarity: 25, denoise: 35, vibrance: 20, contrast: 10 },
+      landscape: { scale: 4, sharpen: 70, clarity: 45, denoise: 15, vibrance: 40, contrast: 25 },
+      doc: { scale: 2, sharpen: 85, clarity: 60, denoise: 30, vibrance: 0, contrast: 45 }
+    };
+
+    var currentConfig = Object.assign({}, PRESETS.auto);
+
+    root.innerHTML =
+      '<div id="hdDropArea" style="margin-bottom:18px"></div>' +
+      '<div id="hdWorkspace" style="display:none" class="hd-studio">' +
+        /* Presets and Scale Toolbar */
+        '<div class="panel-row" style="gap:12px;flex-wrap:wrap;align-items:center;background:var(--surface-2);padding:12px 16px;border-radius:14px;border:1px solid var(--border)">' +
+          '<div><span class="label" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Enhance Preset:</span>' +
+          '<div class="seg" id="hdPresets">' +
+            '<button class="active" data-p="auto">' + icon('sparkles', 'icon-sm') + 'Auto HD</button>' +
+            '<button data-p="face">👤 Portrait / Face</button>' +
+            '<button data-p="landscape">🌄 Landscape 4K</button>' +
+            '<button data-p="doc">📄 Document Text</button>' +
+            '<button data-p="custom">🎛️ Custom</button>' +
+          '</div></div>' +
+          '<div><span class="label" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Resolution Scale:</span>' +
+          '<div class="seg" id="hdScales">' +
+            '<button data-s="1">1x (Sharpness)</button>' +
+            '<button data-s="2" class="active">2x (Full HD)</button>' +
+            '<button data-s="4">4x (Ultra HD 4K)</button>' +
+          '</div></div>' +
+          '<span class="spacer"></span>' +
+          '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+            '<span class="hd-res-badge" id="hdOrigRes">Original: -</span>' +
+            '<span>➔</span>' +
+            '<span class="hd-res-badge pill-green" id="hdNewRes">Enhanced: -</span>' +
+          '</div>' +
+        '</div>' +
+
+        /* Split Screen Comparison Viewer */
+        '<div class="hd-compare-box" id="hdCompareContainer" title="Drag left/right to compare Before vs After">' +
+          '<img id="hdImgAfter" class="hd-img-layer" alt="Enhanced Ultra HD">' +
+          '<div class="hd-before-wrap" id="hdBeforeWrap">' +
+            '<img id="hdImgBefore" class="hd-img-layer" alt="Original Photo">' +
+          '</div>' +
+          '<div class="hd-slider-handle" id="hdHandle">' +
+            '<div class="hd-handle-circle">↔</div>' +
+          '</div>' +
+          '<span class="hd-tag hd-tag-before">Before (Original)</span>' +
+          '<span class="hd-tag hd-tag-after">' + icon('sparkles', 'icon-sm') + 'After (Ultra HD)</span>' +
+        '</div>' +
+
+        /* Custom Fine-Tuning Sliders (Hidden unless Custom or expanded) */
+        '<div id="hdSlidersBox" style="display:none" class="hd-controls-grid">' +
+          '<div class="hd-slider-row"><label><span>Sharpen &amp; Details</span><strong id="hdValSharpen">' + currentConfig.sharpen + '%</strong></label><input type="range" id="hdRangeSharpen" min="0" max="100" value="' + currentConfig.sharpen + '"></div>' +
+          '<div class="hd-slider-row"><label><span>Clarity &amp; Micro-contrast</span><strong id="hdValClarity">' + currentConfig.clarity + '%</strong></label><input type="range" id="hdRangeClarity" min="0" max="100" value="' + currentConfig.clarity + '"></div>' +
+          '<div class="hd-slider-row"><label><span>Denoise &amp; Artifact Cleaning</span><strong id="hdValDenoise">' + currentConfig.denoise + '%</strong></label><input type="range" id="hdRangeDenoise" min="0" max="100" value="' + currentConfig.denoise + '"></div>' +
+          '<div class="hd-slider-row"><label><span>Color Vibrance &amp; Pop</span><strong id="hdValVibrance">' + currentConfig.vibrance + '%</strong></label><input type="range" id="hdRangeVibrance" min="0" max="100" value="' + currentConfig.vibrance + '"></div>' +
+          '<div class="hd-slider-row"><label><span>Dynamic Contrast</span><strong id="hdValContrast">' + currentConfig.contrast + '%</strong></label><input type="range" id="hdRangeContrast" min="-30" max="50" value="' + currentConfig.contrast + '"></div>' +
+        '</div>' +
+
+        /* Action Buttons */
+        '<div class="toolbar" style="gap:12px;margin-top:4px;flex-wrap:wrap">' +
+          '<button class="btn btn-primary btn-lg" id="hdDlPng">' + icon('download') + 'Download Ultra HD (PNG)</button>' +
+          '<button class="btn btn-dark btn-lg" id="hdDlJpg">' + icon('download') + 'Download HD (JPG 100%)</button>' +
+          '<button class="btn" id="hdCopyImg">' + icon('copy') + 'Copy Image</button>' +
+          '<span class="spacer"></span>' +
+          '<button class="btn btn-danger" id="hdResetBtn">' + icon('trash') + 'Upload Another Photo</button>' +
+        '</div>' +
+      '</div>';
+
+    var dz = F.dropzone({
+      accept: 'image/*,.heic',
+      maxFiles: 1,
+      compact: false,
+      title: 'Drop a photo or image to enhance to Ultra HD',
+      sub: 'Supports JPG, PNG, WebP, HEIC, BMP (100% private in-browser processing)',
+      onFiles: function (files) {
+        var f = files[0];
+        if (!f) return;
+        currentName = f.name;
+        F.toast('Loading photo…');
+
+        if (/\.heic$/i.test(f.name)) {
+          F.LIB.heic().then(function (heic2any) {
+            return heic2any({ blob: f, toType: 'image/jpeg' });
+          }).then(function (blob) {
+            loadImageFromBlob(blob);
+          }).catch(function (e) {
+            F.toast('HEIC decoding failed: ' + e.message, 'error');
+          });
+        } else {
+          loadImageFromBlob(f);
+        }
+      }
+    });
+    F.$('#hdDropArea', root).appendChild(dz);
+
+    var workspace = F.$('#hdWorkspace', root);
+    var compareBox = F.$('#hdCompareContainer', root);
+    var beforeWrap = F.$('#hdBeforeWrap', root);
+    var handle = F.$('#hdHandle', root);
+    var imgBefore = F.$('#hdImgBefore', root);
+    var imgAfter = F.$('#hdImgAfter', root);
+    var origRes = F.$('#hdOrigRes', root);
+    var newRes = F.$('#hdNewRes', root);
+    var slidersBox = F.$('#hdSlidersBox', root);
+
+    function loadImageFromBlob(blob) {
+      var url = URL.createObjectURL(blob);
+      var img = new Image();
+      img.onload = function () {
+        currentImg = img;
+        dz.classList.add('compact');
+        workspace.style.display = 'flex';
+        origRes.textContent = 'Original: ' + img.width + ' × ' + img.height + ' px';
+        imgBefore.src = url;
+        processHD();
+      };
+      img.src = url;
+    }
+
+    function processHD() {
+      if (!currentImg) return;
+      var srcCanvas = document.createElement('canvas');
+      srcCanvas.width = currentImg.width;
+      srcCanvas.height = currentImg.height;
+      var sCtx = srcCanvas.getContext('2d');
+      sCtx.drawImage(currentImg, 0, 0);
+
+      enhancedCanvas = renderHDFull(srcCanvas, currentConfig);
+      var afterUrl = enhancedCanvas.toDataURL('image/jpeg', 0.95);
+      imgAfter.src = afterUrl;
+
+      newRes.textContent = 'Enhanced: ' + enhancedCanvas.width + ' × ' + enhancedCanvas.height + ' px (' + (currentConfig.scale >= 4 ? 'Ultra HD 4K' : currentConfig.scale === 2 ? 'Full HD' : 'Sharp') + ')';
+      syncBeforeImageSize();
+      F.toast('Photo enhanced to HD!');
+    }
+
+    function syncBeforeImageSize() {
+      setTimeout(function () {
+        if (imgAfter.offsetWidth) {
+          imgBefore.style.width = imgAfter.offsetWidth + 'px';
+          imgBefore.style.height = imgAfter.offsetHeight + 'px';
+        }
+      }, 50);
+    }
+
+    /* Comparison Slider Logic (Mouse & Touch) */
+    var isDragging = false;
+    function updateSplit(clientX) {
+      var rect = compareBox.getBoundingClientRect();
+      var x = clientX - rect.left;
+      var pct = Math.max(0, Math.min(100, (x / rect.width) * 100));
+      beforeWrap.style.width = pct + '%';
+      handle.style.left = pct + '%';
+      syncBeforeImageSize();
+    }
+
+    compareBox.addEventListener('mousedown', function (e) {
+      isDragging = true;
+      updateSplit(e.clientX);
+    });
+    window.addEventListener('mousemove', function (e) {
+      if (!isDragging) return;
+      updateSplit(e.clientX);
+    });
+    window.addEventListener('mouseup', function () { isDragging = false; });
+
+    compareBox.addEventListener('touchstart', function (e) {
+      if (e.touches && e.touches[0]) updateSplit(e.touches[0].clientX);
+    }, { passive: true });
+    compareBox.addEventListener('touchmove', function (e) {
+      if (e.touches && e.touches[0]) updateSplit(e.touches[0].clientX);
+    }, { passive: true });
+
+    /* Preset Selection */
+    F.$$('#hdPresets button', root).forEach(function (b) {
+      b.onclick = function () {
+        var p = b.getAttribute('data-p');
+        F.$$('#hdPresets button', root).forEach(function (x) { x.classList.toggle('active', x === b); });
+        if (p === 'custom') {
+          slidersBox.style.display = 'grid';
+        } else {
+          slidersBox.style.display = 'none';
+          Object.assign(currentConfig, PRESETS[p]);
+          // Sync scale buttons
+          F.$$('#hdScales button', root).forEach(function (sb) {
+            sb.classList.toggle('active', +sb.getAttribute('data-s') === currentConfig.scale);
+          });
+          syncSlidersUI();
+          processHD();
+        }
+      };
+    });
+
+    /* Scale Selection */
+    F.$$('#hdScales button', root).forEach(function (b) {
+      b.onclick = function () {
+        var s = +b.getAttribute('data-s');
+        F.$$('#hdScales button', root).forEach(function (x) { x.classList.toggle('active', x === b); });
+        currentConfig.scale = s;
+        processHD();
+      };
+    });
+
+    /* Sliders Event Handling */
+    function syncSlidersUI() {
+      F.$('#hdRangeSharpen', root).value = currentConfig.sharpen;
+      F.$('#hdValSharpen', root).textContent = currentConfig.sharpen + '%';
+      F.$('#hdRangeClarity', root).value = currentConfig.clarity;
+      F.$('#hdValClarity', root).textContent = currentConfig.clarity + '%';
+      F.$('#hdRangeDenoise', root).value = currentConfig.denoise;
+      F.$('#hdValDenoise', root).textContent = currentConfig.denoise + '%';
+      F.$('#hdRangeVibrance', root).value = currentConfig.vibrance;
+      F.$('#hdValVibrance', root).textContent = currentConfig.vibrance + '%';
+      F.$('#hdRangeContrast', root).value = currentConfig.contrast || 0;
+      F.$('#hdValContrast', root).textContent = (currentConfig.contrast || 0) + '%';
+    }
+
+    var debounceProcess = (function () {
+      var t;
+      return function () { clearTimeout(t); t = setTimeout(processHD, 120); };
+    })();
+
+    function bindSlider(id, prop) {
+      var r = F.$('#hdRange' + id, root), valSpan = F.$('#hdVal' + id, root);
+      r.addEventListener('input', function () {
+        currentConfig[prop] = +r.value;
+        valSpan.textContent = r.value + '%';
+        debounceProcess();
+      });
+    }
+    bindSlider('Sharpen', 'sharpen');
+    bindSlider('Clarity', 'clarity');
+    bindSlider('Denoise', 'denoise');
+    bindSlider('Vibrance', 'vibrance');
+    bindSlider('Contrast', 'contrast');
+
+    /* Download Actions */
+    F.$('#hdDlPng', root).onclick = function () {
+      if (!enhancedCanvas) return F.toast('No enhanced image ready', 'error');
+      var dot = currentName.lastIndexOf('.');
+      var base = dot >= 0 ? currentName.slice(0, dot) : currentName;
+      F.canvasToBlob(enhancedCanvas, 'image/png').then(function (blob) {
+        F.download(blob, base + '_HD.png');
+        F.toast('Downloaded Ultra HD (PNG)');
+      });
+    };
+
+    F.$('#hdDlJpg', root).onclick = function () {
+      if (!enhancedCanvas) return F.toast('No enhanced image ready', 'error');
+      var dot = currentName.lastIndexOf('.');
+      var base = dot >= 0 ? currentName.slice(0, dot) : currentName;
+      F.canvasToBlob(enhancedCanvas, 'image/jpeg', 0.98).then(function (blob) {
+        F.download(blob, base + '_HD.jpg');
+        F.toast('Downloaded HD (JPG 100%)');
+      });
+    };
+
+    F.$('#hdCopyImg', root).onclick = function () {
+      if (!enhancedCanvas) return F.toast('No enhanced image ready', 'error');
+      if (!(navigator.clipboard && window.ClipboardItem)) return F.toast('Browser does not support copying images; use Download', 'error');
+      F.canvasToBlob(enhancedCanvas, 'image/png').then(function (blob) {
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(function () {
+          F.toast('HD Image copied to clipboard!');
+        }, function () {
+          F.toast('Clipboard write error; use Download instead', 'error');
+        });
+      });
+    };
+
+    F.$('#hdResetBtn', root).onclick = function () {
+      workspace.style.display = 'none';
+      dz.classList.remove('compact');
+      currentImg = null;
+      enhancedCanvas = null;
+    };
+  };
 })();

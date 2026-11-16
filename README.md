@@ -1,4 +1,4 @@
-# Ardan Tools — 21 utilitas online yang berjalan 100% di browser
+# Ardan Tools — 22 utilitas online yang berjalan 100% di browser
 
 Situs statis (HTML + CSS + JavaScript murni, tanpa build step). Semua file diproses di perangkat pengguna, tidak ada upload ke server.
 
@@ -13,7 +13,7 @@ js/data.js            ⚙️ KONFIGURASI: nama situs, email kontak, iklan, dafta
 js/app.js             Router, header/footer, beranda, kategori, About/Privacy/Terms/Contact
 js/qr.js              Encoder QR code (versi 1–40, level L/M/Q/H)
 js/tools-text.js      Word Counter, JSON, Base64, CSV↔JSON, Case, Markdown, Hash/UUID, Minifier, RNG, File Translator
-js/tools-media.js     Kompresor/Resizer/Konverter gambar, HEIC, SVG, PDF (compress/to-JPG/merge), QR
+js/tools-media.js     Kompresor/Resizer/Konverter gambar, HEIC, SVG, PDF, QR, HD Photo Enhancer (Upscaler 4K)
 vendor/               JSZip, pdf-lib, pdf.js, marked (disertakan lokal, tidak perlu CDN)
 serve.js              Local web server (port 4000)
 start-server.bat      Klik 2x untuk menyalakan server lokal
@@ -24,7 +24,7 @@ share-online.bat      Klik 2x untuk membuat link online publik (tunnel) agar bis
 
 - `/` beranda (pencarian + filter kategori)
 - `/categories/image|pdf|text|developer`
-- `/tools/<slug>` — 21 tool (termasuk `/tools/file-translator`, `/tools/translate-pdf`, `/tools/translite-file`, `/tools/rng`)
+- `/tools/<slug>` — 22 tool (termasuk `/tools/hd-photo-enhancer`, `/tools/pembuat-foto-hd`, `/tools/foto-hd`, `/tools/file-translator`, `/tools/translate-pdf`, `/tools/rng`)
 - `/about`, `/privacy`, `/terms`, `/contact`
 
 ## Cara Akses & Menjalankan
