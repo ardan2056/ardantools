@@ -24,7 +24,7 @@ share-online.bat      Klik 2x untuk membuat link online publik (tunnel) agar bis
 
 - `/` beranda (pencarian + filter kategori)
 - `/categories/image|pdf|text|developer`
-- `/tools/<slug>` — 21 tool (termasuk `/tools/file-translator`, `/tools/translite-file`, `/tools/rng`)
+- `/tools/<slug>` — 21 tool (termasuk `/tools/file-translator`, `/tools/translate-pdf`, `/tools/translite-file`, `/tools/rng`)
 - `/about`, `/privacy`, `/terms`, `/contact`
 
 ## Cara Akses & Menjalankan

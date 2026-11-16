@@ -1201,17 +1201,115 @@
     return res.join('\n\n');
   }
 
-  IMPL['file-translator'] = IMPL['translate-file'] = IMPL['translite-file'] = function (root) {
+  async function exportToPdf(translatedText, originalFileName, targetLang) {
+    var PDFLib = await F.LIB.pdflib();
+    var pdfDoc = await PDFLib.PDFDocument.create();
+    var font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+    var boldFont = await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+    var fontSize = 10;
+    var lineHeight = 14;
+    var margin = 50;
+    var pageWidth = 595.28; // A4
+    var pageHeight = 841.89; // A4
+    var maxLineWidth = pageWidth - margin * 2;
+
+    var rawLines = (translatedText || '').split(/\r?\n/);
+    var wrappedLines = [];
+
+    rawLines.forEach(function (raw) {
+      if (!raw.trim()) {
+        wrappedLines.push({ text: '', isHeader: false });
+        return;
+      }
+      var isHeader = /^---\s*Page\s+\d+\s*---/i.test(raw) || /^#+\s+/.test(raw);
+      var clean = raw.replace(/^#+\s+/, '');
+      var words = clean.split(' ');
+      var cur = '';
+      words.forEach(function (w) {
+        var test = cur ? cur + ' ' + w : w;
+        var safe = test.replace(/[^\x20-\x7E\xA0-\xFF]/g, ' ');
+        try {
+          var sz = isHeader ? 12 : fontSize;
+          var f = isHeader ? boldFont : font;
+          if (f.widthOfTextAtSize(safe, sz) > maxLineWidth) {
+            if (cur) wrappedLines.push({ text: cur, isHeader: isHeader });
+            cur = w;
+          } else {
+            cur = test;
+          }
+        } catch (e) {
+          cur = test;
+        }
+      });
+      if (cur) wrappedLines.push({ text: cur, isHeader: isHeader });
+    });
+
+    var linesPerPage = Math.floor((pageHeight - margin * 2 - 40) / lineHeight);
+    var totalPages = Math.ceil(wrappedLines.length / linesPerPage) || 1;
+
+    for (var p = 0; p < totalPages; p++) {
+      var page = pdfDoc.addPage([pageWidth, pageHeight]);
+      var y = pageHeight - margin;
+
+      // Header watermark/brand
+      page.drawText('Ardan Tools  •  Translated Document (' + targetLang.toUpperCase() + ')', {
+        x: margin,
+        y: y,
+        size: 8.5,
+        font: boldFont,
+        color: PDFLib.rgb(0.31, 0.27, 0.90)
+      });
+      y -= 22;
+
+      var pageItems = wrappedLines.slice(p * linesPerPage, (p + 1) * linesPerPage);
+      pageItems.forEach(function (item) {
+        if (item.text) {
+          var f = item.isHeader ? boldFont : font;
+          var sz = item.isHeader ? 11.5 : fontSize;
+          var safeText = item.text.replace(/[^\x20-\x7E\xA0-\xFF]/g, ' ');
+          try {
+            page.drawText(safeText, {
+              x: margin,
+              y: y,
+              size: sz,
+              font: f,
+              color: item.isHeader ? PDFLib.rgb(0.1, 0.1, 0.1) : PDFLib.rgb(0.2, 0.2, 0.2)
+            });
+          } catch (err) {}
+        }
+        y -= lineHeight;
+      });
+
+      // Footer page number
+      page.drawText('Page ' + (p + 1) + ' of ' + totalPages, {
+        x: pageWidth / 2 - 25,
+        y: margin / 2,
+        size: 8.5,
+        font: font,
+        color: PDFLib.rgb(0.5, 0.5, 0.5)
+      });
+    }
+
+    var bytes = await pdfDoc.save();
+    var dot = originalFileName.lastIndexOf('.');
+    var base = dot >= 0 ? originalFileName.slice(0, dot) : originalFileName;
+    var outName = base + '_' + targetLang + '.pdf';
+    F.download(new Blob([bytes], { type: 'application/pdf' }), outName);
+  }
+
+  IMPL['file-translator'] = IMPL['translate-file'] = IMPL['translite-file'] = IMPL['translate-pdf'] = IMPL['pdf-translator'] = function (root) {
     var loadedFileName = 'document.txt';
     var loadedExt = '.txt';
 
     var SAMPLE_DOC =
-      '# Welcome to Ardan Tools File Translator\n\n' +
-      'Translate full documents, Markdown guides, subtitle files (.srt, .vtt), and JSON data instantly.\n\n' +
+      '# Welcome to Ardan Tools File & PDF Translator\n\n' +
+      'Translate full PDF documents, Markdown guides, subtitle files (.srt, .vtt), and JSON data instantly and automatically.\n\n' +
       '### Key Capabilities:\n' +
-      '- Preserves timestamps when translating subtitle files\n' +
-      '- Retains Markdown syntax like headers, lists, and links\n' +
-      '- 100% free and fast in-browser translation';
+      '- Direct PDF upload with automatic text extraction across all pages\n' +
+      '- Automatic translation on upload without extra clicks\n' +
+      '- Download translated results back as a PDF document or TXT file\n' +
+      '- Preserves timestamps when translating subtitle files (.srt, .vtt)\n' +
+      '- 100% free and private in-browser processing';
 
     var SAMPLE_SRT =
       '1\n00:00:01,000 --> 00:00:04,500\nHello everyone, welcome back to our channel!\n\n' +
@@ -1232,6 +1330,7 @@
             return '<option value="' + l.code + '"' + (l.code === 'id' ? ' selected' : '') + '>' + l.name + '</option>';
           }).join('') +
         '</select></div>' +
+        '<label class="switch" style="align-self:flex-end;margin-bottom:6px"><input type="checkbox" id="tlAutoTrans" checked><span class="track"></span>Auto-translate on upload</label>' +
         '<span class="spacer"></span>' +
         '<span class="pill pill-green" id="tlFormatBadge" style="align-self:flex-end;margin-bottom:4px">' + icon('file', 'icon-sm') + '<span id="tlFormatText">Text File</span></span>' +
         '<button class="btn btn-primary btn-lg" id="tlTransBtn" style="align-self:flex-end;margin-bottom:2px">' + icon('globe') + 'Translate File</button>' +
@@ -1254,28 +1353,29 @@
               '<button class="btn btn-sm btn-danger" id="tlClear">' + icon('trash', 'icon-sm') + 'Clear</button>' +
             '</span>' +
           '</div>' +
-          '<textarea class="editor" id="tlInput" placeholder="Paste text here or drag & drop any file (.txt, .md, .srt, .vtt, .json, .csv)…" spellcheck="false" style="white-space:pre-wrap"></textarea>' +
+          '<textarea class="editor" id="tlInput" placeholder="Paste text here or drag & drop any file (.pdf, .txt, .md, .srt, .vtt, .json, .csv)…" spellcheck="false" style="white-space:pre-wrap"></textarea>' +
           '<div class="meta" id="tlInMeta" style="margin-top:6px">0 characters · 0 words</div>' +
         '</div>' +
         '<div>' +
           '<div class="panel-head">' +
             '<span class="panel-title">' + icon('checkCircle', 'icon-sm') + 'Translated Output</span>' +
             '<span class="toolbar">' +
+              '<button class="btn btn-sm btn-dark" id="tlDlPdf" title="Download translated content as PDF document">' + icon('file', 'icon-sm') + 'Download as PDF</button>' +
+              '<button class="btn btn-sm btn-primary" id="tlDownload" title="Download as text file">' + icon('download', 'icon-sm') + 'Download File</button>' +
               '<button class="btn btn-sm" id="tlCopy">' + icon('copy', 'icon-sm') + 'Copy Text</button>' +
-              '<button class="btn btn-sm btn-primary" id="tlDownload">' + icon('download', 'icon-sm') + 'Download File</button>' +
             '</span>' +
           '</div>' +
-          '<textarea class="editor" id="tlOutput" placeholder="Translated text will appear here. You can edit it directly before downloading…" spellcheck="false" style="white-space:pre-wrap"></textarea>' +
+          '<textarea class="editor" id="tlOutput" placeholder="Translated text will appear here. You can edit it directly before downloading as PDF or text…" spellcheck="false" style="white-space:pre-wrap"></textarea>' +
           '<div class="meta" id="tlOutMeta" style="margin-top:6px">Ready to translate</div>' +
         '</div>' +
       '</div>';
 
     var dz = F.dropzone({
-      accept: '.txt,.md,.srt,.vtt,.json,.csv,.html,.xml',
+      accept: '.pdf,.txt,.md,.srt,.vtt,.json,.csv,.html,.xml',
       maxFiles: 1,
       compact: true,
-      title: 'Drop a document, subtitle, or data file here',
-      sub: 'Supports .txt, .md, .srt, .vtt, .json, .csv (or type/paste below)',
+      title: 'Drop a PDF, document, subtitle, or data file here',
+      sub: 'Supports PDF (.pdf), Text (.txt), Markdown (.md), Subtitles (.srt, .vtt), JSON',
       onFiles: function (files) {
         var f = files[0];
         if (!f) return;
@@ -1283,13 +1383,69 @@
         var dot = f.name.lastIndexOf('.');
         loadedExt = dot >= 0 ? f.name.slice(dot).toLowerCase() : '.txt';
 
-        F.readText(f).then(function (content) {
-          input.value = content;
-          updateFormat();
-          F.toast('Loaded ' + f.name);
-        }).catch(function (e) {
-          F.toast('Could not read file: ' + e.message, 'error');
-        });
+        if (loadedExt === '.pdf') {
+          progBox.style.display = '';
+          progBar.style.width = '10%';
+          progPct.textContent = '10%';
+          progLabel.textContent = 'Loading PDF engine…';
+
+          F.LIB.pdfjs().then(function (pdfjs) {
+            return F.readArrayBuffer(f).then(function (buf) {
+              return pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
+            });
+          }).then(async function (pdf) {
+            var totalPages = pdf.numPages;
+            var allPages = [];
+            for (var p = 1; p <= totalPages; p++) {
+              var pct = Math.round((p / totalPages) * 35);
+              progBar.style.width = pct + '%';
+              progPct.textContent = pct + '%';
+              progLabel.textContent = 'Extracting PDF page ' + p + ' of ' + totalPages + '…';
+
+              var page = await pdf.getPage(p);
+              var textContent = await page.getTextContent();
+              var lastY, line = '', lines = [];
+              textContent.items.forEach(function (item) {
+                if (lastY !== undefined && Math.abs(item.transform[5] - lastY) > 5) {
+                  if (line.trim()) lines.push(line.trim());
+                  line = '';
+                }
+                line += (line ? ' ' : '') + item.str;
+                lastY = item.transform[5];
+              });
+              if (line.trim()) lines.push(line.trim());
+              var pText = lines.join('\n');
+              if (pText.trim()) allPages.push('--- Page ' + p + ' ---\n' + pText);
+            }
+
+            var fullText = allPages.join('\n\n');
+            input.value = fullText;
+            updateFormat();
+            F.toast('Extracted ' + totalPages + ' page' + (totalPages > 1 ? 's' : '') + ' from ' + f.name);
+
+            if (autoTrans.checked) {
+              progLabel.textContent = 'Auto-translating PDF…';
+              setTimeout(function () { btnTrans.click(); }, 300);
+            } else {
+              progBox.style.display = 'none';
+            }
+          }).catch(function (err) {
+            progBox.style.display = 'none';
+            console.error('PDF error:', err);
+            F.toast('Failed to parse PDF: ' + err.message, 'error');
+          });
+        } else {
+          F.readText(f).then(function (content) {
+            input.value = content;
+            updateFormat();
+            F.toast('Loaded ' + f.name);
+            if (autoTrans.checked) {
+              setTimeout(function () { btnTrans.click(); }, 300);
+            }
+          }).catch(function (e) {
+            F.toast('Could not read file: ' + e.message, 'error');
+          });
+        }
       }
     });
     F.$('#tlDropArea', root).appendChild(dz);
@@ -1300,6 +1456,7 @@
     var selTo = F.$('#tlTo', root);
     var btnTrans = F.$('#tlTransBtn', root);
     var btnSwap = F.$('#tlSwap', root);
+    var autoTrans = F.$('#tlAutoTrans', root);
     var formatText = F.$('#tlFormatText', root);
     var progBox = F.$('#tlProgressBox', root);
     var progBar = F.$('#tlProgressBar', root);
@@ -1314,11 +1471,13 @@
       var words = (v.match(/[\p{L}\p{N}]+/gu) || []).length;
       inMeta.textContent = chars.toLocaleString() + ' characters · ' + words.toLocaleString() + ' words · File: ' + loadedFileName;
 
+      var isPdf = loadedExt === '.pdf' || /---\s*Page\s+\d+\s*---/i.test(v);
       var isSrt = /-->/m.test(v) && (/^\d+\s*[\r\n]+\d{2}:\d{2}:\d{2}/m.test(v) || /^WEBVTT/m.test(v));
       var isJson = loadedExt === '.json' || (/^\s*[\{\[]/.test(v) && /[\}\]]\s*$/.test(v));
       var isMd = loadedExt === '.md' || /^#+\s+/m.test(v);
 
-      if (isSrt) formatText.textContent = 'Subtitle (' + (loadedExt === '.vtt' ? 'VTT' : 'SRT') + ' - Timestamps Preserved)';
+      if (isPdf) formatText.textContent = 'PDF Document (Text Extracted)';
+      else if (isSrt) formatText.textContent = 'Subtitle (' + (loadedExt === '.vtt' ? 'VTT' : 'SRT') + ' - Timestamps Preserved)';
       else if (isJson) formatText.textContent = 'JSON Data (Keys Preserved)';
       else if (isMd) formatText.textContent = 'Markdown Document';
       else formatText.textContent = 'Text Document (' + loadedExt + ')';
@@ -1342,7 +1501,7 @@
       loadedExt = '.md';
       input.value = SAMPLE_DOC;
       updateFormat();
-      F.toast('Loaded sample markdown document');
+      F.toast('Loaded sample document');
     };
 
     F.$('#tlSampleSrt', root).onclick = function () {
@@ -1377,7 +1536,7 @@
       progBox.style.display = '';
       progBar.style.width = '0%';
       progPct.textContent = '0%';
-      progLabel.textContent = 'Starting translation…';
+      progLabel.textContent = 'Translating content…';
 
       function onProgress(cur, total) {
         var pct = total ? Math.round((cur / total) * 100) : 0;
@@ -1426,8 +1585,22 @@
       if (!val) return F.toast('No translated file to download', 'error');
       var dot = loadedFileName.lastIndexOf('.');
       var base = dot >= 0 ? loadedFileName.slice(0, dot) : loadedFileName;
-      var outName = base + '_' + selTo.value + loadedExt;
+      var outExt = loadedExt === '.pdf' ? '.txt' : loadedExt;
+      var outName = base + '_' + selTo.value + outExt;
       F.download(new Blob([val], { type: 'text/plain;charset=utf-8' }), outName);
+    };
+
+    F.$('#tlDlPdf', root).onclick = async function () {
+      var val = output.value;
+      if (!val) return F.toast('No translated content to export as PDF', 'error');
+      try {
+        F.toast('Generating translated PDF document…');
+        await exportToPdf(val, loadedFileName, selTo.value);
+        F.toast('Translated PDF downloaded!');
+      } catch (err) {
+        console.error('PDF export error:', err);
+        F.toast('Failed to generate PDF: ' + err.message, 'error');
+      }
     };
 
     input.value = SAMPLE_DOC;
