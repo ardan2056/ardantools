@@ -1,0 +1,11 @@
+{
+  "name": "ardantools",
+  "version": "1.0.0",
+  "description": "Fast, Free & Private Online Utilities",
+  "scripts": {
+    "start": "node serve.js",
+    "serve": "node serve.js",
+    "tunnel": "npx localtunnel --port 4000",
+    "deploy": "npx vercel"
+  }
+}

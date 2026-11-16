@@ -1,0 +1,28 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/tools/:slug",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/categories/:slug",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(about|privacy|terms|contact)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/vendor/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    }
+  ]
+}
