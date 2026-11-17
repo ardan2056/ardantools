@@ -1297,17 +1297,146 @@
     F.download(new Blob([bytes], { type: 'application/pdf' }), outName);
   }
 
+  function clusterTextItems(items, viewport) {
+    if (!items || !items.length) return [];
+    var mapped = items.map(function (it) {
+      var pt = viewport.convertToViewportPoint(it.transform[4], it.transform[5]);
+      var scaleH = Math.hypot(it.transform[2], it.transform[3]) * viewport.scale;
+      var h = Math.max(scaleH, (it.height || 0) * viewport.scale) || 14;
+      var w = (it.width || 0) * viewport.scale;
+      var isBold = /bold|black|medi/i.test(it.fontName || '');
+      return {
+        str: it.str || '',
+        x: pt[0],
+        y: pt[1],
+        width: w,
+        height: h,
+        isBold: isBold,
+        fontName: it.fontName
+      };
+    }).filter(function (m) {
+      return m.str && m.str.trim().length > 0;
+    });
+
+    mapped.sort(function (a, b) {
+      if (Math.abs(a.y - b.y) > 4) return a.y - b.y;
+      return a.x - b.x;
+    });
+
+    var lines = [];
+    var cur = null;
+    for (var i = 0; i < mapped.length; i++) {
+      var item = mapped[i];
+      if (!cur) {
+        cur = {
+          text: item.str,
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          isBold: item.isBold,
+          fontName: item.fontName
+        };
+      } else {
+        var yDiff = Math.abs(cur.y - item.y);
+        var xGap = item.x - (cur.x + cur.width);
+        if (yDiff <= Math.max(5, cur.height * 0.35) && xGap < (cur.height * 2.2)) {
+          cur.text += (xGap > 1 ? ' ' : '') + item.str;
+          cur.width = (item.x + item.width) - cur.x;
+          cur.height = Math.max(cur.height, item.height);
+          cur.isBold = cur.isBold || item.isBold;
+        } else {
+          lines.push(cur);
+          cur = {
+            text: item.str,
+            x: item.x,
+            y: item.y,
+            width: item.width,
+            height: item.height,
+            isBold: item.isBold,
+            fontName: item.fontName
+          };
+        }
+      }
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  function sampleBgAndTextColor(ctx, x, y, w, h, cw, ch) {
+    var samples = [
+      [Math.max(0, x - 3), Math.max(0, y - h - 3)],
+      [Math.min(cw - 1, x + w + 3), Math.max(0, y - h - 3)],
+      [Math.max(0, x - 3), Math.min(ch - 1, y + 2)],
+      [Math.min(cw - 1, x + w + 3), Math.min(ch - 1, y + 2)],
+      [Math.max(0, x + w / 2), Math.max(0, y - h - 3)],
+      [Math.max(0, x + w / 2), Math.min(ch - 1, y + 3)]
+    ];
+    var r = 0, g = 0, b = 0, count = 0;
+    samples.forEach(function (pt) {
+      try {
+        var d = ctx.getImageData(Math.floor(pt[0]), Math.floor(pt[1]), 1, 1).data;
+        if (d[3] > 120) {
+          r += d[0]; g += d[1]; b += d[2]; count++;
+        }
+      } catch (e) {}
+    });
+    if (!count) return { bg: '#ffffff', text: '#0f172a', lum: 255 };
+    r = Math.round(r / count);
+    g = Math.round(g / count);
+    b = Math.round(b / count);
+    var lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    return {
+      bg: 'rgb(' + r + ',' + g + ',' + b + ')',
+      text: lum < 135 ? '#ffffff' : '#0f172a',
+      lum: lum
+    };
+  }
+
+  async function exportDirectPdf(transCanvases, pageSizes, originalFileName, toLang) {
+    if (!transCanvases || !transCanvases.length) {
+      throw new Error('No translated PDF pages available');
+    }
+    var PDFLib = await F.LIB.pdflib();
+    var pdfDoc = await PDFLib.PDFDocument.create();
+    for (var i = 0; i < transCanvases.length; i++) {
+      var c = transCanvases[i];
+      var blob = await F.canvasToBlob(c, 'image/jpeg', 0.94);
+      var ab = await blob.arrayBuffer();
+      var img = await pdfDoc.embedJpg(ab);
+      var size = (pageSizes && pageSizes[i]) ? pageSizes[i] : [c.width / 1.8, c.height / 1.8];
+      var pg = pdfDoc.addPage(size);
+      pg.drawImage(img, { x: 0, y: 0, width: size[0], height: size[1] });
+    }
+    var bytes = await pdfDoc.save({ useObjectStreams: true });
+    var dot = originalFileName.lastIndexOf('.');
+    var base = dot >= 0 ? originalFileName.slice(0, dot) : originalFileName;
+    var outName = base + '_' + toLang + '.pdf';
+    F.download(new Blob([bytes], { type: 'application/pdf' }), outName);
+  }
+
   IMPL['file-translator'] = IMPL['translate-file'] = IMPL['translite-file'] = IMPL['translate-pdf'] = IMPL['pdf-translator'] = function (root) {
     var loadedFileName = 'document.txt';
     var loadedExt = '.txt';
+
+    var currentPdfDoc = null;
+    var currentPdfBuffer = null;
+    var pdfPageCount = 0;
+    var pdfCurrentPage = 1;
+    var pdfPageSizes = [];
+    var pdfOrigCanvases = [];
+    var pdfTransCanvases = [];
+    var pdfExtractedLines = [];
+    var pdfTranslatedLines = [];
+    var pdfIsTranslated = false;
 
     var SAMPLE_DOC =
       '# Welcome to Ardan Tools File & PDF Translator\n\n' +
       'Translate full PDF documents, Markdown guides, subtitle files (.srt, .vtt), and JSON data instantly and automatically.\n\n' +
       '### Key Capabilities:\n' +
-      '- Direct PDF upload with automatic text extraction across all pages\n' +
-      '- Automatic translation on upload without extra clicks\n' +
-      '- Download translated results back as a PDF document or TXT file\n' +
+      '- Direct PDF upload with 100% visual layout, images, and page preservation\n' +
+      '- Automatic in-place text translation without converting to plain text\n' +
+      '- Download translated results directly as an authentic PDF document (.pdf)\n' +
       '- Preserves timestamps when translating subtitle files (.srt, .vtt)\n' +
       '- 100% free and private in-browser processing';
 
@@ -1342,8 +1471,55 @@
         '<div class="progress"><span id="tlProgressBar" style="width:0%"></span></div>' +
       '</div>' +
 
-      /* Split View */
-      '<div class="md-split">' +
+      /* Visual PDF Document Viewer (Active when PDF is loaded) */
+      '<div id="tlPdfViewBox" class="tl-pdf-view" style="display:none">' +
+        '<div class="tl-pdf-nav">' +
+          '<div class="nav-pages">' +
+            '<button class="btn btn-sm" id="tlPdfPrev">◀ Prev</button>' +
+            '<span>Page <strong id="tlPdfCurPage">1</strong> of <strong id="tlPdfTotalPages">1</strong></span>' +
+            '<button class="btn btn-sm" id="tlPdfNext">Next ▶</button>' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+            '<span class="pill pill-green" style="font-size:12px">' + icon('checkCircle', 'icon-sm') + 'Layout &amp; Images 100% Preserved</span>' +
+            '<div class="seg" id="tlViewMode">' +
+              '<button data-m="doc" class="active">📄 Visual PDF</button>' +
+              '<button data-m="text">📝 Text View</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="tl-pdf-stage" id="tlPdfStage">' +
+          '<div class="tl-pdf-card">' +
+            '<div class="tl-pdf-card-head">' +
+              '<span>' + icon('file', 'icon-sm') + 'Original PDF (Page <span class="tl-page-num">1</span>)</span>' +
+              '<span class="badge badge-dim" id="tlOrigLangBadge">Original Document</span>' +
+            '</div>' +
+            '<div class="tl-pdf-canvas-wrap" id="tlWrapOrig">' +
+              '<canvas id="tlCanvasOrig"></canvas>' +
+            '</div>' +
+          '</div>' +
+          '<div class="tl-pdf-card">' +
+            '<div class="tl-pdf-card-head">' +
+              '<span>' + icon('sparkles', 'icon-sm') + 'Translated PDF (Page <span class="tl-page-num">1</span>)</span>' +
+              '<span class="badge badge-primary" id="tlTransLangBadge">Translated Document</span>' +
+            '</div>' +
+            '<div class="tl-pdf-canvas-wrap" id="tlWrapTrans">' +
+              '<canvas id="tlCanvasTrans"></canvas>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="toolbar" style="gap:12px;margin-top:6px;flex-wrap:wrap">' +
+          '<button class="btn btn-primary btn-lg" id="tlPdfDlPdf">' + icon('download') + 'Download Translated PDF (.pdf)</button>' +
+          '<button class="btn btn-dark" id="tlPdfDlTxt">' + icon('file', 'icon-sm') + 'Download Text (.txt)</button>' +
+          '<button class="btn" id="tlPdfCopy">' + icon('copy', 'icon-sm') + 'Copy Translated Text</button>' +
+          '<span class="spacer"></span>' +
+          '<button class="btn btn-danger" id="tlPdfReset">' + icon('trash', 'icon-sm') + 'Upload Another File</button>' +
+        '</div>' +
+      '</div>' +
+
+      /* Text Editor Split View (Active for Text, Markdown, Subtitles, or Toggled) */
+      '<div id="tlTextViewBox" class="md-split">' +
         '<div>' +
           '<div class="panel-head">' +
             '<span class="panel-title" id="tlInTitle">' + icon('file', 'icon-sm') + 'Original Content</span>' +
@@ -1385,49 +1561,60 @@
 
         if (loadedExt === '.pdf') {
           progBox.style.display = '';
-          progBar.style.width = '10%';
-          progPct.textContent = '10%';
-          progLabel.textContent = 'Loading PDF engine…';
+          progBar.style.width = '15%';
+          progPct.textContent = '15%';
+          progLabel.textContent = 'Loading original PDF document…';
+
+          pdfOrigCanvases = [];
+          pdfTransCanvases = [];
+          pdfPageSizes = [];
+          pdfExtractedLines = [];
+          pdfTranslatedLines = [];
+          pdfIsTranslated = false;
+          pdfCurrentPage = 1;
+
+          pdfViewBox.style.display = '';
+          textViewBox.style.display = 'none';
+          formatText.textContent = 'PDF Document (Preserves Layout & Images)';
 
           F.LIB.pdfjs().then(function (pdfjs) {
             return F.readArrayBuffer(f).then(function (buf) {
+              currentPdfBuffer = buf;
               return pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
             });
           }).then(async function (pdf) {
-            var totalPages = pdf.numPages;
-            var allPages = [];
-            for (var p = 1; p <= totalPages; p++) {
-              var pct = Math.round((p / totalPages) * 35);
-              progBar.style.width = pct + '%';
-              progPct.textContent = pct + '%';
-              progLabel.textContent = 'Extracting PDF page ' + p + ' of ' + totalPages + '…';
+            currentPdfDoc = pdf;
+            pdfPageCount = pdf.numPages;
+            pdfTotalPages.textContent = pdfPageCount;
+            pdfCurPage.textContent = '1';
+            updatePageLabels(1);
 
-              var page = await pdf.getPage(p);
-              var textContent = await page.getTextContent();
-              var lastY, line = '', lines = [];
-              textContent.items.forEach(function (item) {
-                if (lastY !== undefined && Math.abs(item.transform[5] - lastY) > 5) {
-                  if (line.trim()) lines.push(line.trim());
-                  line = '';
-                }
-                line += (line ? ' ' : '') + item.str;
-                lastY = item.transform[5];
-              });
-              if (line.trim()) lines.push(line.trim());
-              var pText = lines.join('\n');
-              if (pText.trim()) allPages.push('--- Page ' + p + ' ---\n' + pText);
-            }
+            progBar.style.width = '35%';
+            progPct.textContent = '35%';
+            progLabel.textContent = 'Rendering Page 1 preview…';
 
-            var fullText = allPages.join('\n\n');
-            input.value = fullText;
-            updateFormat();
-            F.toast('Extracted ' + totalPages + ' page' + (totalPages > 1 ? 's' : '') + ' from ' + f.name);
+            // Pre-render Page 1 Original
+            var p1 = await currentPdfDoc.getPage(1);
+            var vp1 = p1.getViewport({ scale: 1.8 });
+            var baseVp1 = p1.getViewport({ scale: 1.0 });
+            pdfPageSizes[0] = [baseVp1.width, baseVp1.height];
+
+            var oCanvas = document.createElement('canvas');
+            oCanvas.width = vp1.width;
+            oCanvas.height = vp1.height;
+            var oCtx = oCanvas.getContext('2d');
+            oCtx.fillStyle = '#ffffff';
+            oCtx.fillRect(0, 0, vp1.width, vp1.height);
+            await p1.render({ canvasContext: oCtx, viewport: vp1 }).promise;
+            pdfOrigCanvases[0] = oCanvas;
+
+            // Display on preview
+            showPdfPage(1);
+            progBox.style.display = 'none';
+            F.toast('Loaded ' + f.name + ' (' + pdfPageCount + ' page' + (pdfPageCount > 1 ? 's' : '') + '). Ready to translate!');
 
             if (autoTrans.checked) {
-              progLabel.textContent = 'Auto-translating PDF…';
-              setTimeout(function () { btnTrans.click(); }, 300);
-            } else {
-              progBox.style.display = 'none';
+              setTimeout(function () { btnTrans.click(); }, 350);
             }
           }).catch(function (err) {
             progBox.style.display = 'none';
@@ -1435,6 +1622,8 @@
             F.toast('Failed to parse PDF: ' + err.message, 'error');
           });
         } else {
+          pdfViewBox.style.display = 'none';
+          textViewBox.style.display = 'grid';
           F.readText(f).then(function (content) {
             input.value = content;
             updateFormat();
@@ -1465,6 +1654,76 @@
     var inMeta = F.$('#tlInMeta', root);
     var outMeta = F.$('#tlOutMeta', root);
 
+    var pdfViewBox = F.$('#tlPdfViewBox', root);
+    var textViewBox = F.$('#tlTextViewBox', root);
+    var pdfCurPage = F.$('#tlPdfCurPage', root);
+    var pdfTotalPages = F.$('#tlPdfTotalPages', root);
+    var btnPdfPrev = F.$('#tlPdfPrev', root);
+    var btnPdfNext = F.$('#tlPdfNext', root);
+    var canvasOrig = F.$('#tlCanvasOrig', root);
+    var canvasTrans = F.$('#tlCanvasTrans', root);
+    var pdfDlPdf = F.$('#tlPdfDlPdf', root);
+    var pdfDlTxt = F.$('#tlPdfDlTxt', root);
+    var pdfCopy = F.$('#tlPdfCopy', root);
+    var pdfReset = F.$('#tlPdfReset', root);
+    var pdfStage = F.$('#tlPdfStage', root);
+    var transLangBadge = F.$('#tlTransLangBadge', root);
+
+    function updatePageLabels(num) {
+      root.querySelectorAll('.tl-page-num').forEach(function (el) { el.textContent = num; });
+    }
+
+    function showPdfPage(num) {
+      if (num < 1 || num > pdfPageCount) return;
+      pdfCurrentPage = num;
+      pdfCurPage.textContent = pdfCurrentPage;
+      updatePageLabels(pdfCurrentPage);
+      btnPdfPrev.disabled = (pdfCurrentPage <= 1);
+      btnPdfNext.disabled = (pdfCurrentPage >= pdfPageCount);
+
+      var orig = pdfOrigCanvases[pdfCurrentPage - 1];
+      if (orig) {
+        canvasOrig.width = orig.width;
+        canvasOrig.height = orig.height;
+        var oCtx = canvasOrig.getContext('2d');
+        oCtx.drawImage(orig, 0, 0);
+      }
+      var trans = pdfTransCanvases[pdfCurrentPage - 1];
+      if (trans) {
+        canvasTrans.width = trans.width;
+        canvasTrans.height = trans.height;
+        var tCtx = canvasTrans.getContext('2d');
+        tCtx.drawImage(trans, 0, 0);
+      } else if (orig) {
+        canvasTrans.width = orig.width;
+        canvasTrans.height = orig.height;
+        var tCtx = canvasTrans.getContext('2d');
+        tCtx.drawImage(orig, 0, 0);
+      }
+    }
+
+    btnPdfPrev.onclick = function () {
+      if (pdfCurrentPage > 1) showPdfPage(pdfCurrentPage - 1);
+    };
+    btnPdfNext.onclick = function () {
+      if (pdfCurrentPage < pdfPageCount) showPdfPage(pdfCurrentPage + 1);
+    };
+
+    F.$$('#tlViewMode button', root).forEach(function (btn) {
+      btn.onclick = function () {
+        F.$$('#tlViewMode button', root).forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        var m = btn.dataset.m;
+        if (m === 'doc') {
+          pdfStage.style.display = 'grid';
+          textViewBox.style.display = 'none';
+        } else {
+          pdfStage.style.display = 'none';
+          textViewBox.style.display = 'grid';
+        }
+      };
+    });
+
     function updateFormat() {
       var v = input.value;
       var chars = v.length;
@@ -1476,7 +1735,7 @@
       var isJson = loadedExt === '.json' || (/^\s*[\{\[]/.test(v) && /[\}\]]\s*$/.test(v));
       var isMd = loadedExt === '.md' || /^#+\s+/m.test(v);
 
-      if (isPdf) formatText.textContent = 'PDF Document (Text Extracted)';
+      if (isPdf) formatText.textContent = 'PDF Document (Preserves Layout & Images)';
       else if (isSrt) formatText.textContent = 'Subtitle (' + (loadedExt === '.vtt' ? 'VTT' : 'SRT') + ' - Timestamps Preserved)';
       else if (isJson) formatText.textContent = 'JSON Data (Keys Preserved)';
       else if (isMd) formatText.textContent = 'Markdown Document';
@@ -1499,6 +1758,8 @@
     F.$('#tlSampleText', root).onclick = function () {
       loadedFileName = 'sample_guide.md';
       loadedExt = '.md';
+      pdfViewBox.style.display = 'none';
+      textViewBox.style.display = 'grid';
       input.value = SAMPLE_DOC;
       updateFormat();
       F.toast('Loaded sample document');
@@ -1507,6 +1768,8 @@
     F.$('#tlSampleSrt', root).onclick = function () {
       loadedFileName = 'sample_subtitles.srt';
       loadedExt = '.srt';
+      pdfViewBox.style.display = 'none';
+      textViewBox.style.display = 'grid';
       input.value = SAMPLE_SRT;
       updateFormat();
       F.toast('Loaded sample subtitle (.srt)');
@@ -1517,18 +1780,42 @@
       output.value = '';
       loadedFileName = 'document.txt';
       loadedExt = '.txt';
+      pdfViewBox.style.display = 'none';
+      textViewBox.style.display = 'grid';
       updateFormat();
       outMeta.textContent = 'Ready to translate';
     };
 
-    btnTrans.onclick = async function () {
-      var text = input.value.trim();
-      if (!text) return F.toast('Please enter text or upload a file first', 'error');
+    pdfReset.onclick = function () {
+      pdfOrigCanvases = [];
+      pdfTransCanvases = [];
+      pdfPageSizes = [];
+      currentPdfDoc = null;
+      currentPdfBuffer = null;
+      pdfPageCount = 0;
+      pdfCurrentPage = 1;
+      pdfIsTranslated = false;
+      pdfViewBox.style.display = 'none';
+      textViewBox.style.display = 'grid';
+      input.value = SAMPLE_DOC;
+      output.value = '';
+      loadedFileName = 'document.txt';
+      loadedExt = '.txt';
+      updateFormat();
+      F.toast('Ready for a new file');
+    };
 
+    btnTrans.onclick = async function () {
       var from = selFrom.value;
       var to = selTo.value;
       if (from === to && from !== 'auto') {
         return F.toast('Source and target languages are the same', 'error');
+      }
+
+      var isPdf = (loadedExt === '.pdf' && currentPdfDoc);
+
+      if (!isPdf && !input.value.trim()) {
+        return F.toast('Please enter text or upload a file first', 'error');
       }
 
       btnTrans.disabled = true;
@@ -1536,43 +1823,179 @@
       progBox.style.display = '';
       progBar.style.width = '0%';
       progPct.textContent = '0%';
-      progLabel.textContent = 'Translating content…';
 
-      function onProgress(cur, total) {
-        var pct = total ? Math.round((cur / total) * 100) : 0;
-        progBar.style.width = pct + '%';
-        progPct.textContent = pct + '%';
-        progLabel.textContent = 'Translating chunk ' + cur + ' of ' + total + ' (' + pct + '%)…';
-      }
+      if (isPdf) {
+        /* Direct Multi-Page PDF Translation: Preserving all Images, Graphics, Layout */
+        try {
+          var allOrigPageTexts = [];
+          var allTransPageTexts = [];
 
-      try {
-        var isSrt = /-->/m.test(text) && (/^\d+\s*[\r\n]+\d{2}:\d{2}:\d{2}/m.test(text) || /^WEBVTT/m.test(text));
-        var isJson = loadedExt === '.json' || (/^\s*\{/.test(text) && /\}\s*$/.test(text));
+          for (var p = 1; p <= pdfPageCount; p++) {
+            var curPct = Math.round(((p - 1) / pdfPageCount) * 88);
+            progBar.style.width = curPct + '%';
+            progPct.textContent = curPct + '%';
+            progLabel.textContent = 'Translating PDF Page ' + p + ' of ' + pdfPageCount + ' (preserving images & layout)…';
 
-        var result = '';
-        if (isSrt) {
-          result = await translateSubtitleText(text, from, to, onProgress);
-        } else if (isJson) {
-          try {
-            result = await translateJsonText(text, from, to, onProgress);
-          } catch (e) {
-            result = await translateGeneralDocument(text, from, to, onProgress);
+            var page = await currentPdfDoc.getPage(p);
+            var vp = page.getViewport({ scale: 1.8 });
+            var baseVp = page.getViewport({ scale: 1.0 });
+            pdfPageSizes[p - 1] = [baseVp.width, baseVp.height];
+
+            // Render original page if not already done
+            var oCanvas = pdfOrigCanvases[p - 1];
+            if (!oCanvas) {
+              oCanvas = document.createElement('canvas');
+              oCanvas.width = vp.width;
+              oCanvas.height = vp.height;
+              var oCtx = oCanvas.getContext('2d');
+              oCtx.fillStyle = '#ffffff';
+              oCtx.fillRect(0, 0, vp.width, vp.height);
+              await page.render({ canvasContext: oCtx, viewport: vp }).promise;
+              pdfOrigCanvases[p - 1] = oCanvas;
+            }
+
+            // Create translated canvas cloned from original (has all images, colors, graphics)
+            var tCanvas = document.createElement('canvas');
+            tCanvas.width = oCanvas.width;
+            tCanvas.height = oCanvas.height;
+            var tCtx = tCanvas.getContext('2d');
+            tCtx.drawImage(oCanvas, 0, 0);
+
+            // Extract text items & cluster into lines
+            var tc = await page.getTextContent();
+            var lines = clusterTextItems(tc.items, vp);
+            var pOrigLines = lines.map(function (l) { return l.text.trim(); });
+            var pTransLines = [];
+
+            if (lines.length > 0) {
+              var SEP = '[[[SEP]]]';
+              var combined = pOrigLines.join('\n' + SEP + '\n');
+              var transCombined = await translateSingleChunk(combined, from, to);
+              var transParts = transCombined.split(/\r?\n?\s*\[\[\[SEP\]\]\]\s*\r?\n?/);
+
+              for (var k = 0; k < lines.length; k++) {
+                var line = lines[k];
+                var tText = (transParts[k] || line.text).trim();
+                pTransLines.push(tText);
+
+                // Sample background around text box to erase old text seamlessly
+                var col = sampleBgAndTextColor(tCtx, line.x, line.y, line.width, line.height, tCanvas.width, tCanvas.height);
+                tCtx.fillStyle = col.bg;
+                tCtx.fillRect(line.x - 2, line.y - line.height - 2, line.width + 4, line.height + 5);
+
+                // Draw translated text with auto-fitting font size
+                tCtx.fillStyle = col.text;
+                tCtx.textBaseline = 'alphabetic';
+                var fs = Math.round(line.height * 0.92);
+                var isBold = line.isBold || /bold|black|medi/i.test(line.fontName || '');
+                tCtx.font = (isBold ? 'bold ' : '') + fs + 'px "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+                var mw = tCtx.measureText(tText).width;
+                if (mw > line.width && line.width > 24) {
+                  var sc = Math.max(0.62, line.width / mw);
+                  fs = Math.max(9, Math.round(fs * sc));
+                  tCtx.font = (isBold ? 'bold ' : '') + fs + 'px "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                }
+                tCtx.fillText(tText, line.x, line.y);
+              }
+            }
+
+            pdfTransCanvases[p - 1] = tCanvas;
+            allOrigPageTexts.push('--- Page ' + p + ' ---\n' + pOrigLines.join('\n'));
+            allTransPageTexts.push('--- Page ' + p + ' (' + to.toUpperCase() + ') ---\n' + pTransLines.join('\n'));
+
+            // Live update currently viewed page
+            if (p === pdfCurrentPage) {
+              showPdfPage(pdfCurrentPage);
+            }
           }
-        } else {
-          result = await translateGeneralDocument(text, from, to, onProgress);
+
+          pdfIsTranslated = true;
+          input.value = allOrigPageTexts.join('\n\n');
+          output.value = allTransPageTexts.join('\n\n');
+          updateFormat();
+
+          transLangBadge.textContent = 'Translated (' + to.toUpperCase() + ')';
+          showPdfPage(pdfCurrentPage);
+
+          progBar.style.width = '100%';
+          progPct.textContent = '100%';
+          progLabel.textContent = 'Translation complete! Layout & images preserved.';
+          F.toast('PDF translated successfully with original layout & images preserved!');
+        } catch (err) {
+          console.error('PDF translation error:', err);
+          F.toast('PDF translation failed: ' + err.message, 'error');
+        } finally {
+          btnTrans.disabled = false;
+          btnTrans.innerHTML = icon('globe') + 'Translate File';
+          setTimeout(function () { progBox.style.display = 'none'; }, 2200);
+        }
+      } else {
+        /* Text, Markdown, Subtitle Translation */
+        var text = input.value.trim();
+        progLabel.textContent = 'Translating content…';
+        function onProgress(cur, total) {
+          var pct = total ? Math.round((cur / total) * 100) : 0;
+          progBar.style.width = pct + '%';
+          progPct.textContent = pct + '%';
+          progLabel.textContent = 'Translating chunk ' + cur + ' of ' + total + ' (' + pct + '%)…';
         }
 
-        output.value = result;
-        outMeta.textContent = 'Done! ' + result.length.toLocaleString() + ' characters · Target: ' + to.toUpperCase();
-        F.toast('Translation completed successfully!');
-      } catch (err) {
-        console.error('Translation error:', err);
-        F.toast('Translation failed: ' + err.message, 'error');
-      } finally {
-        btnTrans.disabled = false;
-        btnTrans.innerHTML = icon('globe') + 'Translate File';
-        setTimeout(function () { progBox.style.display = 'none'; }, 2000);
+        try {
+          var isSrt = /-->/m.test(text) && (/^\d+\s*[\r\n]+\d{2}:\d{2}:\d{2}/m.test(text) || /^WEBVTT/m.test(text));
+          var isJson = loadedExt === '.json' || (/^\s*\{/.test(text) && /\}\s*$/.test(text));
+
+          var result = '';
+          if (isSrt) {
+            result = await translateSubtitleText(text, from, to, onProgress);
+          } else if (isJson) {
+            try {
+              result = await translateJsonText(text, from, to, onProgress);
+            } catch (e) {
+              result = await translateGeneralDocument(text, from, to, onProgress);
+            }
+          } else {
+            result = await translateGeneralDocument(text, from, to, onProgress);
+          }
+
+          output.value = result;
+          outMeta.textContent = 'Done! ' + result.length.toLocaleString() + ' characters · Target: ' + to.toUpperCase();
+          F.toast('Translation completed successfully!');
+        } catch (err) {
+          console.error('Translation error:', err);
+          F.toast('Translation failed: ' + err.message, 'error');
+        } finally {
+          btnTrans.disabled = false;
+          btnTrans.innerHTML = icon('globe') + 'Translate File';
+          setTimeout(function () { progBox.style.display = 'none'; }, 2000);
+        }
       }
+    };
+
+    pdfDlPdf.onclick = async function () {
+      if (!pdfTransCanvases.length) return F.toast('Please translate the PDF first', 'error');
+      try {
+        F.toast('Compiling translated PDF document…');
+        await exportDirectPdf(pdfTransCanvases, pdfPageSizes, loadedFileName, selTo.value);
+        F.toast('Translated PDF downloaded!');
+      } catch (err) {
+        console.error('PDF export error:', err);
+        F.toast('Failed to download PDF: ' + err.message, 'error');
+      }
+    };
+
+    pdfDlTxt.onclick = function () {
+      var val = output.value;
+      if (!val) return F.toast('No translated text available', 'error');
+      var dot = loadedFileName.lastIndexOf('.');
+      var base = dot >= 0 ? loadedFileName.slice(0, dot) : loadedFileName;
+      F.download(new Blob([val], { type: 'text/plain;charset=utf-8' }), base + '_' + selTo.value + '.txt');
+    };
+
+    pdfCopy.onclick = function () {
+      var val = output.value;
+      if (!val) return F.toast('No translated text available', 'error');
+      F.copyText(val, 'Translated text copied to clipboard');
     };
 
     F.$('#tlCopy', root).onclick = function () {

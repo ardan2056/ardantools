@@ -502,8 +502,8 @@ window.TOOLS = [
   },
   {
     slug: 'file-translator', name: 'File & PDF Translator (Dokumen, PDF & Subtitle)', cat: 'text', label: 'Multi-Language', icon: 'globe', ad: 'privacy',
-    desc: 'Translate PDF documents, text files, Markdown, subtitles (SRT/VTT), and JSON automatically between 20+ languages.',
-    intro: 'Translate PDF documents, TXT, Markdown (.md), Subtitles (.srt, .vtt), and JSON files automatically between over 20 languages with smart text extraction and PDF export.',
+    desc: 'Translate PDF documents with 100% layout and image preservation, text files, Markdown, subtitles (SRT/VTT), and JSON automatically between 20+ languages.',
+    intro: 'Translate PDF documents directly with full visual layout, pictures, and page preservation, as well as TXT, Markdown (.md), Subtitles (.srt, .vtt), and JSON files between over 20 languages.',
     keywords: 'pdf translate translite translator file dokumen subtitle srt vtt language penerjemah',
     formats: ['PDF (.pdf)', 'Plain Text (.txt)', 'Markdown (.md)', 'Subtitles (.srt, .vtt)', 'JSON (.json)', 'CSV / Code'],
     related: ['word-counter', 'case-converter', 'markdown-to-html'],
