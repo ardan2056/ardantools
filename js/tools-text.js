@@ -1075,30 +1075,74 @@
 
   async function translateSingleChunk(str, from, to) {
     if (!str || !str.trim()) return str;
+    from = from || 'auto';
+    to = to || 'id';
+
+    // 1. Try local server or Vercel serverless translation API (/api/translate)
     try {
-      var url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + encodeURIComponent(from) + '&tl=' + encodeURIComponent(to) + '&dt=t';
-      var res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'q=' + encodeURIComponent(str)
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      var data = await res.json();
-      if (data && data[0]) {
-        return data[0].map(function (x) { return x[0]; }).join('');
-      }
-    } catch (err) {
-      console.warn('Google translate API fallback:', err);
-      try {
-        var f = (from === 'auto' ? 'en' : from);
-        var mmUrl = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(str.substring(0, 500)) + '&langpair=' + f + '|' + to;
-        var mmRes = await fetch(mmUrl);
-        var mmData = await mmRes.json();
-        if (mmData && mmData.responseData && mmData.responseData.translatedText) {
-          return mmData.responseData.translatedText;
+      var apiUrl = '/api/translate?text=' + encodeURIComponent(str) + '&from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to);
+      var apiRes = await fetch(apiUrl);
+      if (apiRes.ok) {
+        var apiData = await apiRes.json();
+        if (apiData && apiData.success && apiData.translation && apiData.translation.trim()) {
+          return apiData.translation;
         }
-      } catch (e2) {}
-    }
+      }
+    } catch (e1) {}
+
+    // 2. Direct browser Google Translate with client=at (AndroidTranslate client, high quota, CORS friendly)
+    try {
+      var atUrl = 'https://translate.googleapis.com/translate_a/single?client=at&dt=t&dj=1&hl=' + encodeURIComponent(to) +
+        '&ie=UTF-8&oe=UTF-8&sl=' + encodeURIComponent(from) + '&tl=' + encodeURIComponent(to) + '&q=' + encodeURIComponent(str);
+      var atRes = await fetch(atUrl);
+      if (atRes.ok) {
+        var atData = await atRes.json();
+        if (atData && atData.sentences && atData.sentences.length) {
+          var translated = atData.sentences.map(function (s) { return s.trans || ''; }).join('');
+          if (translated.trim()) return translated;
+        }
+      }
+    } catch (e2) {}
+
+    // 3. Direct browser Google Translate with clients1.google.com
+    try {
+      var c1Url = 'https://clients1.google.com/translate_a/single?client=at&dt=t&dj=1&hl=' + encodeURIComponent(to) +
+        '&ie=UTF-8&oe=UTF-8&sl=' + encodeURIComponent(from) + '&tl=' + encodeURIComponent(to) + '&q=' + encodeURIComponent(str);
+      var c1Res = await fetch(c1Url);
+      if (c1Res.ok) {
+        var c1Data = await c1Res.json();
+        if (c1Data && c1Data.sentences && c1Data.sentences.length) {
+          var translated2 = c1Data.sentences.map(function (s) { return s.trans || ''; }).join('');
+          if (translated2.trim()) return translated2;
+        }
+      }
+    } catch (e3) {}
+
+    // 4. Direct GET request with client=gtx
+    try {
+      var gtxUrl = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + encodeURIComponent(from) +
+        '&tl=' + encodeURIComponent(to) + '&dt=t&q=' + encodeURIComponent(str);
+      var gtxRes = await fetch(gtxUrl);
+      if (gtxRes.ok) {
+        var gtxData = await gtxRes.json();
+        if (gtxData && gtxData[0]) {
+          var trans3 = gtxData[0].map(function (x) { return x[0]; }).join('');
+          if (trans3.trim()) return trans3;
+        }
+      }
+    } catch (e4) {}
+
+    // 5. MyMemory API fallback
+    try {
+      var f = (from === 'auto' ? 'en' : from);
+      var mmUrl = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(str.substring(0, 500)) + '&langpair=' + f + '|' + to;
+      var mmRes = await fetch(mmUrl);
+      var mmData = await mmRes.json();
+      if (mmData && mmData.responseData && mmData.responseData.translatedText) {
+        return mmData.responseData.translatedText;
+      }
+    } catch (e5) {}
+
     return str;
   }
 
@@ -1301,16 +1345,18 @@
     if (!items || !items.length) return [];
     var mapped = items.map(function (it) {
       var pt = viewport.convertToViewportPoint(it.transform[4], it.transform[5]);
-      var scaleH = Math.hypot(it.transform[2], it.transform[3]) * viewport.scale;
-      var h = Math.max(scaleH, (it.height || 0) * viewport.scale) || 14;
-      var w = (it.width || 0) * viewport.scale;
-      var isBold = /bold|black|medi/i.test(it.fontName || '');
+      var scaleH = Math.abs(it.transform[3]) * viewport.scale;
+      if (!scaleH || scaleH < 6) scaleH = Math.hypot(it.transform[0], it.transform[1]) * viewport.scale;
+      if (!scaleH || scaleH < 6) scaleH = (it.height || 12) * viewport.scale;
+
+      var scaleW = (it.width || 0) * viewport.scale;
+      var isBold = /bold|black|heavy|medi/i.test(it.fontName || '');
       return {
         str: it.str || '',
         x: pt[0],
         y: pt[1],
-        width: w,
-        height: h,
+        w: scaleW,
+        fs: Math.round(scaleH),
         isBold: isBold,
         fontName: it.fontName
       };
@@ -1319,7 +1365,7 @@
     });
 
     mapped.sort(function (a, b) {
-      if (Math.abs(a.y - b.y) > 4) return a.y - b.y;
+      if (Math.abs(a.y - b.y) > 6) return a.y - b.y;
       return a.x - b.x;
     });
 
@@ -1332,18 +1378,18 @@
           text: item.str,
           x: item.x,
           y: item.y,
-          width: item.width,
-          height: item.height,
+          width: item.w,
+          fontSize: item.fs,
           isBold: item.isBold,
           fontName: item.fontName
         };
       } else {
         var yDiff = Math.abs(cur.y - item.y);
         var xGap = item.x - (cur.x + cur.width);
-        if (yDiff <= Math.max(5, cur.height * 0.35) && xGap < (cur.height * 2.2)) {
+        if (yDiff <= Math.min(6, cur.fontSize * 0.25) && xGap < (cur.fontSize * 1.8)) {
           cur.text += (xGap > 1 ? ' ' : '') + item.str;
-          cur.width = (item.x + item.width) - cur.x;
-          cur.height = Math.max(cur.height, item.height);
+          cur.width = (item.x + item.w) - cur.x;
+          cur.fontSize = Math.max(cur.fontSize, item.fs);
           cur.isBold = cur.isBold || item.isBold;
         } else {
           lines.push(cur);
@@ -1351,8 +1397,8 @@
             text: item.str,
             x: item.x,
             y: item.y,
-            width: item.width,
-            height: item.height,
+            width: item.w,
+            fontSize: item.fs,
             isBold: item.isBold,
             fontName: item.fontName
           };
@@ -1363,33 +1409,74 @@
     return lines;
   }
 
-  function sampleBgAndTextColor(ctx, x, y, w, h, cw, ch) {
-    var samples = [
-      [Math.max(0, x - 3), Math.max(0, y - h - 3)],
-      [Math.min(cw - 1, x + w + 3), Math.max(0, y - h - 3)],
-      [Math.max(0, x - 3), Math.min(ch - 1, y + 2)],
-      [Math.min(cw - 1, x + w + 3), Math.min(ch - 1, y + 2)],
-      [Math.max(0, x + w / 2), Math.max(0, y - h - 3)],
-      [Math.max(0, x + w / 2), Math.min(ch - 1, y + 3)]
-    ];
-    var r = 0, g = 0, b = 0, count = 0;
-    samples.forEach(function (pt) {
+  function sampleBoxColors(origCtx, boxLeft, boxTop, boxWidth, boxHeight, cw, ch) {
+    var topY = Math.max(0, boxTop - 2);
+    var btmY = Math.min(ch - 1, boxTop + boxHeight + 2);
+    var sampleCount = Math.min(16, Math.max(4, Math.floor(boxWidth / 12)));
+    var step = boxWidth / sampleCount;
+
+    var tr = 0, tg = 0, tb = 0, tSamples = 0;
+    var br = 0, bg = 0, bb = 0, bSamples = 0;
+
+    for (var i = 0; i < sampleCount; i++) {
+      var px = Math.min(cw - 1, Math.floor(boxLeft + (i * step)));
       try {
-        var d = ctx.getImageData(Math.floor(pt[0]), Math.floor(pt[1]), 1, 1).data;
-        if (d[3] > 120) {
-          r += d[0]; g += d[1]; b += d[2]; count++;
+        var td = origCtx.getImageData(px, topY, 1, 1).data;
+        if (td[3] > 80) { tr += td[0]; tg += td[1]; tb += td[2]; tSamples++; }
+      } catch (e1) {}
+      try {
+        var bd = origCtx.getImageData(px, btmY, 1, 1).data;
+        if (bd[3] > 80) { br += bd[0]; bg += bd[1]; bb += bd[2]; bSamples++; }
+      } catch (e2) {}
+    }
+
+    var topColor = tSamples ? { r: Math.round(tr / tSamples), g: Math.round(tg / tSamples), b: Math.round(tb / tSamples) } : { r: 255, g: 255, b: 255 };
+    var btmColor = bSamples ? { r: Math.round(br / bSamples), g: Math.round(bg / bSamples), b: Math.round(bb / bSamples) } : { r: 255, g: 255, b: 255 };
+
+    var avgBgR = Math.round((topColor.r + btmColor.r) / 2);
+    var avgBgG = Math.round((topColor.g + btmColor.g) / 2);
+    var avgBgB = Math.round((topColor.b + btmColor.b) / 2);
+
+    var textColor = null;
+    try {
+      var imgData = origCtx.getImageData(boxLeft, boxTop, boxWidth, boxHeight).data;
+      var maxDist = 0;
+      var candidates = [];
+      for (var p = 0; p < imgData.length; p += 4) {
+        if (imgData[p + 3] < 120) continue;
+        var cr = imgData[p], cg = imgData[p + 1], cb = imgData[p + 2];
+        var dist = Math.hypot(cr - avgBgR, cg - avgBgG, cb - avgBgB);
+        if (dist > maxDist) maxDist = dist;
+        candidates.push({ r: cr, g: cg, b: cb, dist: dist });
+      }
+
+      if (maxDist > 28) {
+        var threshold = maxDist * 0.72;
+        var rSum = 0, gSum = 0, bSum = 0, cCount = 0;
+        for (var c = 0; c < candidates.length; c++) {
+          if (candidates[c].dist >= threshold) {
+            rSum += candidates[c].r;
+            gSum += candidates[c].g;
+            bSum += candidates[c].b;
+            cCount++;
+          }
         }
-      } catch (e) {}
-    });
-    if (!count) return { bg: '#ffffff', text: '#0f172a', lum: 255 };
-    r = Math.round(r / count);
-    g = Math.round(g / count);
-    b = Math.round(b / count);
-    var lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (cCount > 0) {
+          textColor = 'rgb(' + Math.round(rSum / cCount) + ',' + Math.round(gSum / cCount) + ',' + Math.round(bSum / cCount) + ')';
+        }
+      }
+    } catch (e3) {}
+
+    if (!textColor) {
+      var bgLum = 0.299 * avgBgR + 0.587 * avgBgG + 0.114 * avgBgB;
+      textColor = bgLum < 128 ? '#ffffff' : '#0f172a';
+    }
+
     return {
-      bg: 'rgb(' + r + ',' + g + ',' + b + ')',
-      text: lum < 135 ? '#ffffff' : '#0f172a',
-      lum: lum
+      topColor: 'rgb(' + topColor.r + ',' + topColor.g + ',' + topColor.b + ')',
+      btmColor: 'rgb(' + btmColor.r + ',' + btmColor.g + ',' + btmColor.b + ')',
+      textColor: textColor,
+      avgBg: 'rgb(' + avgBgR + ',' + avgBgG + ',' + avgBgB + ')'
     };
   }
 
@@ -1868,31 +1955,42 @@
             var pTransLines = [];
 
             if (lines.length > 0) {
-              var SEP = '[[[SEP]]]';
-              var combined = pOrigLines.join('\n' + SEP + '\n');
-              var transCombined = await translateSingleChunk(combined, from, to);
-              var transParts = transCombined.split(/\r?\n?\s*\[\[\[SEP\]\]\]\s*\r?\n?/);
+              // Translate each line in parallel for 100% accurate 1:1 mapping (no separator token issues)
+              var translatedLines = await Promise.all(pOrigLines.map(function (str) {
+                return translateSingleChunk(str, from, to);
+              }));
 
               for (var k = 0; k < lines.length; k++) {
                 var line = lines[k];
-                var tText = (transParts[k] || line.text).trim();
+                var tText = (translatedLines[k] || line.text).trim();
                 pTransLines.push(tText);
 
-                // Sample background around text box to erase old text seamlessly
-                var col = sampleBgAndTextColor(tCtx, line.x, line.y, line.width, line.height, tCanvas.width, tCanvas.height);
-                tCtx.fillStyle = col.bg;
-                tCtx.fillRect(line.x - 2, line.y - line.height - 2, line.width + 4, line.height + 5);
+                var fs = line.fontSize;
+                // Tight vertical boundaries strictly around the font glyphs
+                var boxTop = Math.max(0, Math.floor(line.y - (fs * 0.78)));
+                var boxBottom = Math.ceil(line.y + (fs * 0.20));
+                var boxHeight = Math.max(8, boxBottom - boxTop);
+                var boxLeft = Math.max(0, Math.floor(line.x - 2));
+                var boxWidth = Math.ceil(line.width + 4);
 
-                // Draw translated text with auto-fitting font size
-                tCtx.fillStyle = col.text;
+                var col = sampleBoxColors(oCtx, boxLeft, boxTop, boxWidth, boxHeight, tCanvas.width, tCanvas.height);
+
+                // Erase old text using smooth vertical gradient that blends into background
+                var grad = tCtx.createLinearGradient(0, boxTop, 0, boxTop + boxHeight);
+                grad.addColorStop(0, col.topColor);
+                grad.addColorStop(1, col.btmColor);
+                tCtx.fillStyle = grad;
+                tCtx.fillRect(boxLeft, boxTop, boxWidth, boxHeight);
+
+                // Draw translated text with exact original color and auto-fit width
+                tCtx.fillStyle = col.textColor;
                 tCtx.textBaseline = 'alphabetic';
-                var fs = Math.round(line.height * 0.92);
-                var isBold = line.isBold || /bold|black|medi/i.test(line.fontName || '');
+                var isBold = line.isBold || fs > 20;
                 tCtx.font = (isBold ? 'bold ' : '') + fs + 'px "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
                 var mw = tCtx.measureText(tText).width;
-                if (mw > line.width && line.width > 24) {
-                  var sc = Math.max(0.62, line.width / mw);
+                if (mw > boxWidth && boxWidth > 20) {
+                  var sc = Math.max(0.60, boxWidth / mw);
                   fs = Math.max(9, Math.round(fs * sc));
                   tCtx.font = (isBold ? 'bold ' : '') + fs + 'px "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
                 }

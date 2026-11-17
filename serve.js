@@ -38,6 +38,13 @@ function getLocalIP() {
 
 const server = http.createServer((req, res) => {
   let reqPath = decodeURIComponent(req.url.split('?')[0]);
+
+  // API Route: Translate proxy
+  if (reqPath === '/api/translate') {
+    const translateHandler = require('./api/translate.js');
+    return translateHandler(req, res);
+  }
+
   if (reqPath === '/') reqPath = '/index.html';
 
   let filePath = path.join(ROOT, reqPath);
