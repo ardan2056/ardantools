@@ -1027,86 +1027,97 @@
   };
 
   /* ---------------- HD Photo Enhancer & Super Resolution ---------------- */
-  function applyUnsharpMask(data, w, h, amount) {
-    if (amount <= 0) return;
-    var copy = new Uint8ClampedArray(data);
-    var a = amount * 0.28;
-    for (var y = 1; y < h - 1; y++) {
-      var row = y * w * 4;
-      var rowUp = (y - 1) * w * 4;
-      var rowDn = (y + 1) * w * 4;
-      for (var x = 1; x < w - 1; x++) {
-        var i = row + (x * 4);
-        var iUp = rowUp + (x * 4);
-        var iDn = rowDn + (x * 4);
-        var iLf = row + ((x - 1) * 4);
-        var iRt = row + ((x + 1) * 4);
-        for (var c = 0; c < 3; c++) {
-          var orig = copy[i + c];
-          var laplacian = (4 * orig) - copy[iUp + c] - copy[iDn + c] - copy[iLf + c] - copy[iRt + c];
-          if (Math.abs(laplacian) > 2) {
-            var val = orig + laplacian * a;
-            data[i + c] = val < 0 ? 0 : val > 255 ? 255 : val;
-          }
+  function clamp(v) { return v < 0 ? 0 : v > 255 ? 255 : v; }
+
+  function applyDeepHD(data, w, h, cfg) {
+    var len = w * h;
+    var Y = new Float32Array(len);
+
+    // 1. Extract Luminance Y
+    for (var i = 0; i < len; i++) {
+      var p = i * 4;
+      Y[i] = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
+    }
+
+    // 2. Fast separable box blur for radius 1 (fine edge deblur) and radius 3 (large structure clarity)
+    var tmp = new Float32Array(len);
+    var blurFine = new Float32Array(len);
+    var blurMed = new Float32Array(len);
+
+    function blurPass(src, dst, r) {
+      for (var y = 0; y < h; y++) {
+        var row = y * w;
+        var val = 0;
+        for (var x = -r; x <= r; x++) val += src[row + Math.max(0, Math.min(w - 1, x))];
+        var count = 2 * r + 1;
+        tmp[row] = val / count;
+        for (var x = 1; x < w; x++) {
+          val += src[row + Math.min(w - 1, x + r)] - src[row + Math.max(0, x - r - 1)];
+          tmp[row + x] = val / count;
+        }
+      }
+      for (var x = 0; x < w; x++) {
+        var val = 0;
+        for (var y = -r; y <= r; y++) val += tmp[Math.max(0, Math.min(h - 1, y)) * w + x];
+        var count = 2 * r + 1;
+        dst[x] = val / count;
+        for (var y = 1; y < h; y++) {
+          val += tmp[Math.min(h - 1, y + r) * w + x] - tmp[Math.max(0, y - r - 1) * w + x];
+          dst[y * w + x] = val / count;
         }
       }
     }
-  }
 
-  function applyClarity(data, strength) {
-    if (strength <= 0) return;
-    var f = strength * 0.45;
-    for (var i = 0; i < data.length; i += 4) {
-      for (var c = 0; c < 3; c++) {
-        var v = data[i + c];
-        var diff = v - 128;
-        var factor = 1 + (f * (1 - Math.abs(diff) / 128));
-        var res = 128 + diff * factor;
-        data[i + c] = res < 0 ? 0 : res > 255 ? 255 : res;
-      }
-    }
-  }
+    blurPass(Y, blurFine, 1);
+    blurPass(Y, blurMed, 3);
 
-  function applyDenoise(data, w, h, strength) {
-    if (strength <= 0) return;
-    var copy = new Uint8ClampedArray(data);
-    var s = strength * 0.6;
-    for (var y = 1; y < h - 1; y++) {
-      var row = y * w * 4;
-      var rowUp = (y - 1) * w * 4;
-      var rowDn = (y + 1) * w * 4;
-      for (var x = 1; x < w - 1; x++) {
-        var i = row + (x * 4);
-        for (var c = 0; c < 3; c++) {
-          var orig = copy[i + c];
-          var avg = (copy[rowUp + x * 4 + c] + copy[rowDn + x * 4 + c] + copy[row + (x - 1) * 4 + c] + copy[row + (x + 1) * 4 + c]) * 0.25;
-          if (Math.abs(orig - avg) < 18) {
-            data[i + c] = Math.round(orig * (1 - s) + avg * s);
-          }
-        }
-      }
-    }
-  }
+    var sAmount = (cfg.sharpen || 65) / 22;
+    var cAmount = (cfg.clarity || 50) / 28;
+    var contrast = (cfg.contrast !== undefined ? cfg.contrast : 20) / 100;
+    var vibrance = (cfg.vibrance !== undefined ? cfg.vibrance : 30) / 100;
+    var denoise = (cfg.denoise || 0) / 100;
 
-  function applyVibrance(data, strength, contrast) {
-    var vFactor = strength * 0.55;
-    for (var i = 0; i < data.length; i += 4) {
-      var r = data[i], g = data[i + 1], b = data[i + 2];
-      if (strength > 0) {
-        var max = Math.max(r, g, b), min = Math.min(r, g, b);
-        var sat = max === 0 ? 0 : (max - min) / max;
-        var boost = vFactor * (1 - sat);
-        var avg = (r + g + b) / 3;
-        r = Math.max(0, Math.min(255, Math.round(r + (r - avg) * boost)));
-        g = Math.max(0, Math.min(255, Math.round(g + (g - avg) * boost)));
-        b = Math.max(0, Math.min(255, Math.round(b + (b - avg) * boost)));
+    for (var i = 0; i < len; i++) {
+      var p = i * 4;
+      var origY = Y[i];
+      var fineDetail = origY - blurFine[i];
+      var medDetail = blurFine[i] - blurMed[i];
+
+      // Subtle denoise: damp tiny high frequency noise in smooth areas
+      if (denoise > 0 && Math.abs(fineDetail) < 7) {
+        fineDetail *= (1 - denoise * 0.7);
       }
+
+      // High-pass edge boost & unblur
+      var newY = origY + (fineDetail * sAmount) + (medDetail * cAmount);
+
+      // Micro-contrast & de-haze curve
       if (contrast !== 0) {
-        r = Math.max(0, Math.min(255, Math.round(128 + (r - 128) * (1 + contrast / 100))));
-        g = Math.max(0, Math.min(255, Math.round(128 + (g - 128) * (1 + contrast / 100))));
-        b = Math.max(0, Math.min(255, Math.round(128 + (b - 128) * (1 + contrast / 100))));
+        newY = 128 + (newY - 128) * (1 + contrast * 0.85);
       }
-      data[i] = r; data[i + 1] = g; data[i + 2] = b;
+      newY = clamp(newY);
+
+      // Apply luminance change back to RGB without shifting hue
+      var ratio = origY > 0.5 ? (newY / origY) : 1;
+      var r = clamp(data[p] * ratio);
+      var g = clamp(data[p + 1] * ratio);
+      var b = clamp(data[p + 2] * ratio);
+
+      // Vibrance boost (vivid colors for text, clothing, scenery)
+      if (vibrance > 0) {
+        var max = Math.max(r, g, b);
+        var min = Math.min(r, g, b);
+        var sat = max === 0 ? 0 : (max - min) / max;
+        var boost = vibrance * (1 - sat) * 0.65;
+        var avg = (r + g + b) / 3;
+        r = clamp(r + (r - avg) * boost);
+        g = clamp(g + (g - avg) * boost);
+        b = clamp(b + (b - avg) * boost);
+      }
+
+      data[p] = r;
+      data[p + 1] = g;
+      data[p + 2] = b;
     }
   }
 
@@ -1124,6 +1135,7 @@
     ctx.imageSmoothingQuality = 'high';
 
     if (scale > 2) {
+      // 2-step upscale with intermediate pass
       var mid = document.createElement('canvas');
       mid.width = Math.round(w * 2);
       mid.height = Math.round(h * 2);
@@ -1137,14 +1149,9 @@
     }
 
     var imgData = ctx.getImageData(0, 0, targetW, targetH);
-    var d = imgData.data;
-
-    if (cfg.denoise > 0) applyDenoise(d, targetW, targetH, cfg.denoise / 100);
-    if (cfg.sharpen > 0) applyUnsharpMask(d, targetW, targetH, cfg.sharpen / 40);
-    if (cfg.clarity > 0) applyClarity(d, cfg.clarity / 100);
-    if (cfg.vibrance > 0 || cfg.contrast !== 0) applyVibrance(d, cfg.vibrance / 100, cfg.contrast || 0);
-
+    applyDeepHD(imgData.data, targetW, targetH, cfg);
     ctx.putImageData(imgData, 0, 0);
+
     return canvas;
   }
 
@@ -1154,10 +1161,10 @@
     var enhancedCanvas = null;
 
     var PRESETS = {
-      auto: { scale: 2, sharpen: 55, clarity: 35, denoise: 20, vibrance: 25, contrast: 15 },
-      face: { scale: 2, sharpen: 45, clarity: 25, denoise: 35, vibrance: 20, contrast: 10 },
-      landscape: { scale: 4, sharpen: 70, clarity: 45, denoise: 15, vibrance: 40, contrast: 25 },
-      doc: { scale: 2, sharpen: 85, clarity: 60, denoise: 30, vibrance: 0, contrast: 45 }
+      auto: { scale: 2, sharpen: 70, clarity: 50, denoise: 15, vibrance: 30, contrast: 25 },
+      face: { scale: 2, sharpen: 55, clarity: 35, denoise: 30, vibrance: 25, contrast: 15 },
+      landscape: { scale: 4, sharpen: 80, clarity: 60, denoise: 15, vibrance: 40, contrast: 30 },
+      doc: { scale: 2, sharpen: 95, clarity: 75, denoise: 20, vibrance: 15, contrast: 45 }
     };
 
     var currentConfig = Object.assign({}, PRESETS.auto);
@@ -1172,12 +1179,12 @@
             '<button class="active" data-p="auto">' + icon('sparkles', 'icon-sm') + 'Auto HD</button>' +
             '<button data-p="face">👤 Portrait / Face</button>' +
             '<button data-p="landscape">🌄 Landscape 4K</button>' +
-            '<button data-p="doc">📄 Document Text</button>' +
+            '<button data-p="doc">📄 Document &amp; Banner</button>' +
             '<button data-p="custom">🎛️ Custom</button>' +
           '</div></div>' +
           '<div><span class="label" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Resolution Scale:</span>' +
           '<div class="seg" id="hdScales">' +
-            '<button data-s="1">1x (Sharpness)</button>' +
+            '<button data-s="1">1x (Sharpness Only)</button>' +
             '<button data-s="2" class="active">2x (Full HD)</button>' +
             '<button data-s="4">4x (Ultra HD 4K)</button>' +
           '</div></div>' +
@@ -1189,17 +1196,19 @@
           '</div>' +
         '</div>' +
 
-        /* Split Screen Comparison Viewer */
+        /* Split Screen Comparison Viewer (Centered Stage) */
         '<div class="hd-compare-box" id="hdCompareContainer" title="Drag left/right to compare Before vs After">' +
-          '<img id="hdImgAfter" class="hd-img-layer" alt="Enhanced Ultra HD">' +
-          '<div class="hd-before-wrap" id="hdBeforeWrap">' +
-            '<img id="hdImgBefore" class="hd-img-layer" alt="Original Photo">' +
+          '<div class="hd-stage" id="hdStage">' +
+            '<img id="hdImgAfter" class="hd-img-layer" alt="Enhanced Ultra HD">' +
+            '<div class="hd-before-wrap" id="hdBeforeWrap">' +
+              '<img id="hdImgBefore" class="hd-img-layer" alt="Original Photo">' +
+            '</div>' +
+            '<div class="hd-divider" id="hdDivider">' +
+              '<div class="hd-handle-circle">↔</div>' +
+            '</div>' +
+            '<span class="hd-tag hd-tag-before">Before (Original)</span>' +
+            '<span class="hd-tag hd-tag-after">' + icon('sparkles', 'icon-sm') + 'After (Ultra HD)</span>' +
           '</div>' +
-          '<div class="hd-slider-handle" id="hdHandle">' +
-            '<div class="hd-handle-circle">↔</div>' +
-          '</div>' +
-          '<span class="hd-tag hd-tag-before">Before (Original)</span>' +
-          '<span class="hd-tag hd-tag-after">' + icon('sparkles', 'icon-sm') + 'After (Ultra HD)</span>' +
         '</div>' +
 
         /* Custom Fine-Tuning Sliders (Hidden unless Custom or expanded) */
@@ -1208,7 +1217,7 @@
           '<div class="hd-slider-row"><label><span>Clarity &amp; Micro-contrast</span><strong id="hdValClarity">' + currentConfig.clarity + '%</strong></label><input type="range" id="hdRangeClarity" min="0" max="100" value="' + currentConfig.clarity + '"></div>' +
           '<div class="hd-slider-row"><label><span>Denoise &amp; Artifact Cleaning</span><strong id="hdValDenoise">' + currentConfig.denoise + '%</strong></label><input type="range" id="hdRangeDenoise" min="0" max="100" value="' + currentConfig.denoise + '"></div>' +
           '<div class="hd-slider-row"><label><span>Color Vibrance &amp; Pop</span><strong id="hdValVibrance">' + currentConfig.vibrance + '%</strong></label><input type="range" id="hdRangeVibrance" min="0" max="100" value="' + currentConfig.vibrance + '"></div>' +
-          '<div class="hd-slider-row"><label><span>Dynamic Contrast</span><strong id="hdValContrast">' + currentConfig.contrast + '%</strong></label><input type="range" id="hdRangeContrast" min="-30" max="50" value="' + currentConfig.contrast + '"></div>' +
+          '<div class="hd-slider-row"><label><span>Dynamic Contrast</span><strong id="hdValContrast">' + currentConfig.contrast + '%</strong></label><input type="range" id="hdRangeContrast" min="-30" max="60" value="' + currentConfig.contrast + '"></div>' +
         '</div>' +
 
         /* Action Buttons */
@@ -1249,9 +1258,9 @@
     F.$('#hdDropArea', root).appendChild(dz);
 
     var workspace = F.$('#hdWorkspace', root);
-    var compareBox = F.$('#hdCompareContainer', root);
+    var stage = F.$('#hdStage', root);
     var beforeWrap = F.$('#hdBeforeWrap', root);
-    var handle = F.$('#hdHandle', root);
+    var divider = F.$('#hdDivider', root);
     var imgBefore = F.$('#hdImgBefore', root);
     var imgAfter = F.$('#hdImgAfter', root);
     var origRes = F.$('#hdOrigRes', root);
@@ -1272,6 +1281,19 @@
       img.src = url;
     }
 
+    function syncStageLayout() {
+      // Ensure imgBefore matches imgAfter dimensions pixel for pixel
+      var w = imgAfter.clientWidth || imgAfter.naturalWidth;
+      var h = imgAfter.clientHeight || imgAfter.naturalHeight;
+      if (w && h) {
+        imgBefore.style.width = w + 'px';
+        imgBefore.style.height = h + 'px';
+      }
+      // Put slider exactly in the middle of the photo
+      beforeWrap.style.width = '50%';
+      divider.style.left = '50%';
+    }
+
     function processHD() {
       if (!currentImg) return;
       var srcCanvas = document.createElement('canvas');
@@ -1281,35 +1303,29 @@
       sCtx.drawImage(currentImg, 0, 0);
 
       enhancedCanvas = renderHDFull(srcCanvas, currentConfig);
-      var afterUrl = enhancedCanvas.toDataURL('image/jpeg', 0.95);
+      var afterUrl = enhancedCanvas.toDataURL('image/jpeg', 0.96);
+      imgAfter.onload = function () {
+        syncStageLayout();
+      };
       imgAfter.src = afterUrl;
 
       newRes.textContent = 'Enhanced: ' + enhancedCanvas.width + ' × ' + enhancedCanvas.height + ' px (' + (currentConfig.scale >= 4 ? 'Ultra HD 4K' : currentConfig.scale === 2 ? 'Full HD' : 'Sharp') + ')';
-      syncBeforeImageSize();
-      F.toast('Photo enhanced to HD!');
+      syncStageLayout();
+      F.toast('Photo enhanced to crystal-clear HD!');
     }
 
-    function syncBeforeImageSize() {
-      setTimeout(function () {
-        if (imgAfter.offsetWidth) {
-          imgBefore.style.width = imgAfter.offsetWidth + 'px';
-          imgBefore.style.height = imgAfter.offsetHeight + 'px';
-        }
-      }, 50);
-    }
-
-    /* Comparison Slider Logic (Mouse & Touch) */
+    /* Comparison Slider Logic: drags strictly relative to the centered photo stage */
     var isDragging = false;
     function updateSplit(clientX) {
-      var rect = compareBox.getBoundingClientRect();
+      var rect = stage.getBoundingClientRect();
+      if (!rect.width) return;
       var x = clientX - rect.left;
       var pct = Math.max(0, Math.min(100, (x / rect.width) * 100));
       beforeWrap.style.width = pct + '%';
-      handle.style.left = pct + '%';
-      syncBeforeImageSize();
+      divider.style.left = pct + '%';
     }
 
-    compareBox.addEventListener('mousedown', function (e) {
+    stage.addEventListener('mousedown', function (e) {
       isDragging = true;
       updateSplit(e.clientX);
     });
@@ -1319,12 +1335,20 @@
     });
     window.addEventListener('mouseup', function () { isDragging = false; });
 
-    compareBox.addEventListener('touchstart', function (e) {
-      if (e.touches && e.touches[0]) updateSplit(e.touches[0].clientX);
+    stage.addEventListener('touchstart', function (e) {
+      if (e.touches && e.touches[0]) {
+        isDragging = true;
+        updateSplit(e.touches[0].clientX);
+      }
     }, { passive: true });
-    compareBox.addEventListener('touchmove', function (e) {
-      if (e.touches && e.touches[0]) updateSplit(e.touches[0].clientX);
+    stage.addEventListener('touchmove', function (e) {
+      if (isDragging && e.touches && e.touches[0]) {
+        updateSplit(e.touches[0].clientX);
+      }
     }, { passive: true });
+    window.addEventListener('touchend', function () { isDragging = false; });
+
+    window.addEventListener('resize', syncStageLayout);
 
     /* Preset Selection */
     F.$$('#hdPresets button', root).forEach(function (b) {
@@ -1395,7 +1419,7 @@
       var dot = currentName.lastIndexOf('.');
       var base = dot >= 0 ? currentName.slice(0, dot) : currentName;
       F.canvasToBlob(enhancedCanvas, 'image/png').then(function (blob) {
-        F.download(blob, base + '_HD.png');
+        F.download(blob, base + '_UltraHD.png');
         F.toast('Downloaded Ultra HD (PNG)');
       });
     };
@@ -1405,7 +1429,7 @@
       var dot = currentName.lastIndexOf('.');
       var base = dot >= 0 ? currentName.slice(0, dot) : currentName;
       F.canvasToBlob(enhancedCanvas, 'image/jpeg', 0.98).then(function (blob) {
-        F.download(blob, base + '_HD.jpg');
+        F.download(blob, base + '_UltraHD.jpg');
         F.toast('Downloaded HD (JPG 100%)');
       });
     };
