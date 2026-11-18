@@ -264,14 +264,67 @@
       ['cpu', 'Instant Processing', 'No upload queue and no download-link delay. Work happens on your local CPU using WebAssembly and native web APIs.'],
       ['gift', 'No Sign-Up or Paywalls', 'Every tool is unlimited and free. No email, no credit card, and no subscription required.']
     ];
+
+    function buildHeroOrbitBanner() {
+      var outerNodes = [
+        { slug: 'merge-pdf', name: 'PDF Tools', icon: 'file', deg: 18, color: 'badge-pdf' },
+        { slug: 'hd-photo-enhancer', name: 'HD 4K Upscale', icon: 'sparkles', deg: 90, color: 'badge-hd' },
+        { slug: 'file-translator', name: 'Doc Translator', icon: 'globe', deg: 162, color: 'badge-trans' },
+        { slug: 'qr-code-generator', name: 'QR Code', icon: 'qr', deg: 234, color: 'badge-qr' },
+        { slug: 'pdf-compressor', name: 'PDF Compress', icon: 'minimize', deg: 306, color: 'badge-compress' }
+      ];
+      var innerNodes = [
+        { slug: 'json-formatter', name: 'JSON & Code', icon: 'braces', deg: 45, color: 'badge-json' },
+        { slug: 'heic-to-jpg', name: 'HEIC / Image', icon: 'image', deg: 165, color: 'badge-img' },
+        { path: '/about', name: '100% Client-Side', icon: 'shieldCheck', deg: 285, color: 'badge-sec' }
+      ];
+
+      function renderNode(item) {
+        var hrefUrl = item.path || ('/tools/' + item.slug);
+        var linkPath = item.path || ('/tools/' + item.slug);
+        return '<div class="orbit-item" style="--deg:' + item.deg + 'deg;">' +
+          '<div class="spoke-ray"></div>' +
+          '<a href="' + href(hrefUrl) + '" data-link data-path="' + linkPath + '" class="orbit-node ' + (item.color || '') + '" title="' + esc(item.name) + '">' +
+            '<span class="node-pill-inner">' +
+              '<span class="node-icon-box">' + icon(item.icon, 'icon-sm') + '</span>' +
+              '<span class="node-text">' + esc(item.name) + '</span>' +
+            '</span>' +
+          '</a>' +
+        '</div>';
+      }
+
+      return '<div class="hero-orbit-stage" id="heroOrbitStage">' +
+        '<div class="orbit-radar-backdrop" id="orbitBackdrop" aria-hidden="true">' +
+          '<div class="orbit-ring ring-1"></div>' +
+          '<div class="orbit-ring ring-2"></div>' +
+          '<div class="orbit-ring ring-3"></div>' +
+          '<div class="orbit-ring ring-4"></div>' +
+          '<div class="radar-sweep"></div>' +
+          '<div class="orbit-hub">' +
+            '<div class="hub-pulse"></div>' +
+            '<div class="hub-disc">' + icon('zap', 'icon-sm') + '</div>' +
+          '</div>' +
+          '<div class="orbit-track track-outer" id="orbitOuter">' +
+            outerNodes.map(renderNode).join('') +
+          '</div>' +
+          '<div class="orbit-track track-inner" id="orbitInner">' +
+            innerNodes.map(renderNode).join('') +
+          '</div>' +
+        '</div>' +
+        '<div class="hero-orbit-content container">' +
+          '<div class="hero-eyebrow"><span class="spark">' + icon('sparkles', 'icon-sm') + '</span>Fast · 100% Free · Private · Zero Signup</div>' +
+          '<h1>Essential Online Utilities, <span class="grad-text">Zero Server Uploads.</span></h1>' +
+          '<p class="lead">Convert, compress, resize, format, and generate content directly in your browser. Your files never leave your device.</p>' +
+          '<div class="hero-trust-bar"><span class="ht-item">' + icon('checkCircle', 'icon-sm') + '100% Free</span><span class="ht-sep">•</span><span class="ht-item">' + icon('shieldCheck', 'icon-sm') + 'No Registration</span><span class="ht-sep">•</span><span class="ht-item">' + icon('zap', 'icon-sm') + 'Client-Side</span></div>' +
+          '<div class="hero-cta"><a href="#all-tools" class="btn btn-primary btn-lg" id="exploreBtn">' + icon('grid') + 'Explore All Tools</a>' + L('/about', 'How it works', 'btn btn-lg') + '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
     var html = header('') + '<main>' +
-      '<section class="hero"><div class="container">' +
-      '<div class="hero-eyebrow"><span class="spark">' + icon('sparkles', 'icon-sm') + '</span>Fast · 100% Free · Private · Zero Signup</div>' +
-      '<h1>Essential Online Utilities, <span class="grad-text">Zero Server Uploads.</span></h1>' +
-      '<p class="lead">Convert, compress, resize, format, and generate content directly in your browser. Your files never leave your device.</p>' +
-      '<div class="hero-trust-bar"><span class="ht-item">' + icon('checkCircle', 'icon-sm') + '100% Free</span><span class="ht-sep">•</span><span class="ht-item">' + icon('shieldCheck', 'icon-sm') + 'No Registration</span><span class="ht-sep">•</span><span class="ht-item">' + icon('zap', 'icon-sm') + 'Client-Side</span></div>' +
-      '<div class="hero-cta"><a href="#all-tools" class="btn btn-primary btn-lg" id="exploreBtn">' + icon('grid') + 'Explore All Tools</a>' + L('/about', 'How it works', 'btn btn-lg') + '</div>' +
-      '</div></section>' +
+      '<section class="hero hero-orbit-section">' +
+      buildHeroOrbitBanner() +
+      '</section>' +
       '<section class="section section-tools" id="all-tools"><div class="container">' +
       '<div class="section-head"><span class="kicker">' + icon('grid', 'icon-sm') + 'Tool Directory</span><h2>All Free Utilities</h2><p>Select any tool to start instant, private processing.</p></div>' +
       '<div class="tool-search">' + icon('search') + '<input type="search" id="toolSearch" placeholder="Search tools… e.g. compress image, pdf, json, svg, uuid" autocomplete="off" aria-label="Search tools"><button class="clear-search" id="clearSearch" aria-label="Clear search">' + icon('x') + '</button></div>' +
@@ -309,6 +362,29 @@
     });
     $('#exploreBtn').addEventListener('click', function (e) { e.preventDefault(); $('#all-tools').scrollIntoView({ behavior: 'smooth' }); });
     draw();
+
+    /* Interactive 3D tilt reaction for rotating radar orbit banner */
+    var stage = $('#heroOrbitStage');
+    var backdrop = $('#orbitBackdrop');
+    if (stage && backdrop && window.matchMedia && window.matchMedia('(pointer: fine)').matches) {
+      var rect = null;
+      var onMove = function (e) {
+        if (!rect) rect = stage.getBoundingClientRect();
+        var cx = rect.left + rect.width / 2;
+        var cy = rect.top + rect.height / 2;
+        var dx = (e.clientX - cx) / (rect.width / 2);
+        var dy = (e.clientY - cy) / (rect.height / 2);
+        var rx = Math.max(-9, Math.min(9, -dy * 7));
+        var ry = Math.max(-9, Math.min(9, dx * 7));
+        backdrop.style.transform = 'translate(-50%, -50%) perspective(1000px) rotateX(' + rx.toFixed(2) + 'deg) rotateY(' + ry.toFixed(2) + 'deg)';
+      };
+      var onLeave = function () {
+        rect = null;
+        backdrop.style.transform = 'translate(-50%, -50%) perspective(1000px) rotateX(0deg) rotateY(0deg)';
+      };
+      stage.addEventListener('mousemove', onMove, { passive: true });
+      stage.addEventListener('mouseleave', onLeave);
+    }
   }
 
   function pageCategory(key) {
