@@ -315,7 +315,6 @@
           '<div class="hero-eyebrow"><span class="spark">' + icon('sparkles', 'icon-sm') + '</span>Fast · 100% Free · Private · Zero Signup</div>' +
           '<h1>Essential Online Utilities, <span class="grad-text">Zero Server Uploads.</span></h1>' +
           '<p class="lead">Convert, compress, resize, format, and generate content directly in your browser. Your files never leave your device.</p>' +
-          '<div class="hero-trust-bar"><span class="ht-item">' + icon('checkCircle', 'icon-sm') + '100% Free</span><span class="ht-sep">•</span><span class="ht-item">' + icon('shieldCheck', 'icon-sm') + 'No Registration</span><span class="ht-sep">•</span><span class="ht-item">' + icon('zap', 'icon-sm') + 'Client-Side</span></div>' +
           '<div class="hero-cta"><a href="#all-tools" class="btn btn-primary btn-lg" id="exploreBtn">' + icon('grid') + 'Explore All Tools</a>' + L('/about', 'How it works', 'btn btn-lg') + '</div>' +
         '</div>' +
       '</div>';
