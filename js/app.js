@@ -266,25 +266,23 @@
     ];
 
     function buildHeroOrbitBanner() {
-      var outerNodes = [
-        { slug: 'merge-pdf', name: 'PDF Tools', icon: 'file', deg: 18, color: 'badge-pdf' },
-        { slug: 'hd-photo-enhancer', name: 'HD 4K Upscale', icon: 'sparkles', deg: 90, color: 'badge-hd' },
-        { slug: 'file-translator', name: 'Doc Translator', icon: 'globe', deg: 162, color: 'badge-trans' },
-        { slug: 'qr-code-generator', name: 'QR Code', icon: 'qr', deg: 234, color: 'badge-qr' },
-        { slug: 'pdf-compressor', name: 'PDF Compress', icon: 'minimize', deg: 306, color: 'badge-compress' }
-      ];
-      var innerNodes = [
-        { slug: 'json-formatter', name: 'JSON & Code', icon: 'braces', deg: 45, color: 'badge-json' },
-        { slug: 'heic-to-jpg', name: 'HEIC / Image', icon: 'image', deg: 165, color: 'badge-img' },
-        { path: '/about', name: '100% Client-Side', icon: 'shieldCheck', deg: 285, color: 'badge-sec' }
+      var fanNodes = [
+        { slug: 'file-translator', name: 'Doc Translator', icon: 'globe', deg: 165, arc: 'outer', color: 'badge-trans' },
+        { slug: 'merge-pdf', name: 'PDF Tools', icon: 'file', deg: 144, arc: 'mid', color: 'badge-pdf' },
+        { slug: 'hd-photo-enhancer', name: 'HD 4K Upscale', icon: 'sparkles', deg: 118, arc: 'outer', color: 'badge-hd' },
+        { path: '/about', name: '100% Client-Side', icon: 'shieldCheck', deg: 90, arc: 'mid', color: 'badge-sec' },
+        { slug: 'qr-code-generator', name: 'QR Code', icon: 'qr', deg: 64, arc: 'outer', color: 'badge-qr' },
+        { slug: 'pdf-compressor', name: 'PDF Compress', icon: 'minimize', deg: 42, arc: 'mid', color: 'badge-compress' },
+        { slug: 'json-formatter', name: 'JSON & Code', icon: 'braces', deg: 22, arc: 'outer', color: 'badge-json' },
+        { slug: 'heic-to-jpg', name: 'HEIC / Image', icon: 'image', deg: 12, arc: 'mid', color: 'badge-img' }
       ];
 
-      function renderNode(item) {
+      function renderFanSpoke(item) {
         var hrefUrl = item.path || ('/tools/' + item.slug);
         var linkPath = item.path || ('/tools/' + item.slug);
-        return '<div class="orbit-item" style="--deg:' + item.deg + 'deg;">' +
-          '<div class="spoke-ray"></div>' +
-          '<a href="' + href(hrefUrl) + '" data-link data-path="' + linkPath + '" class="orbit-node ' + (item.color || '') + '" title="' + esc(item.name) + '">' +
+        return '<div class="fan-spoke spoke-' + item.arc + '" style="--angle:' + item.deg + 'deg;">' +
+          '<div class="fan-spoke-ray"></div>' +
+          '<a href="' + href(hrefUrl) + '" data-link data-path="' + linkPath + '" class="fan-node ' + (item.color || '') + '" title="' + esc(item.name) + '">' +
             '<span class="node-pill-inner">' +
               '<span class="node-icon-box">' + icon(item.icon, 'icon-sm') + '</span>' +
               '<span class="node-text">' + esc(item.name) + '</span>' +
@@ -294,28 +292,27 @@
       }
 
       return '<div class="hero-orbit-stage" id="heroOrbitStage">' +
-        '<div class="orbit-radar-backdrop" id="orbitBackdrop" aria-hidden="true">' +
-          '<div class="orbit-ring ring-1"></div>' +
-          '<div class="orbit-ring ring-2"></div>' +
-          '<div class="orbit-ring ring-3"></div>' +
-          '<div class="orbit-ring ring-4"></div>' +
-          '<div class="radar-sweep"></div>' +
-          '<div class="orbit-hub">' +
-            '<div class="hub-pulse"></div>' +
-            '<div class="hub-disc">' + icon('zap', 'icon-sm') + '</div>' +
-          '</div>' +
-          '<div class="orbit-track track-outer" id="orbitOuter">' +
-            outerNodes.map(renderNode).join('') +
-          '</div>' +
-          '<div class="orbit-track track-inner" id="orbitInner">' +
-            innerNodes.map(renderNode).join('') +
-          '</div>' +
-        '</div>' +
         '<div class="hero-orbit-content container">' +
           '<div class="hero-eyebrow"><span class="spark">' + icon('sparkles', 'icon-sm') + '</span>Fast · 100% Free · Private · Zero Signup</div>' +
           '<h1>Essential Online Utilities, <span class="grad-text">Zero Server Uploads.</span></h1>' +
           '<p class="lead">Convert, compress, resize, format, and generate content directly in your browser. Your files never leave your device.</p>' +
           '<div class="hero-cta"><a href="#all-tools" class="btn btn-primary btn-lg" id="exploreBtn">' + icon('grid') + 'Explore All Tools</a>' + L('/about', 'How it works', 'btn btn-lg') + '</div>' +
+        '</div>' +
+        '<div class="radar-fan-stage" id="radarFanStage" aria-hidden="true">' +
+          '<div class="radar-baseline"></div>' +
+          '<div class="radar-fan-mask">' +
+            '<div class="radar-sweep-beam"></div>' +
+            '<div class="radar-arc arc-inner-fill"></div>' +
+            '<div class="radar-arc arc-mid-line"></div>' +
+            '<div class="radar-arc arc-outer-line"></div>' +
+          '</div>' +
+          '<div class="radar-spokes-group" id="radarSpokesGroup">' +
+            fanNodes.map(renderFanSpoke).join('') +
+          '</div>' +
+          '<div class="radar-hub">' +
+            '<div class="hub-pulse"></div>' +
+            '<div class="hub-disc">' + icon('zap', 'icon-sm') + '</div>' +
+          '</div>' +
         '</div>' +
       '</div>';
     }
@@ -362,10 +359,10 @@
     $('#exploreBtn').addEventListener('click', function (e) { e.preventDefault(); $('#all-tools').scrollIntoView({ behavior: 'smooth' }); });
     draw();
 
-    /* Interactive 3D tilt reaction for rotating radar orbit banner */
+    /* Interactive 3D tilt reaction for semicircular radar fan banner */
     var stage = $('#heroOrbitStage');
-    var backdrop = $('#orbitBackdrop');
-    if (stage && backdrop && window.matchMedia && window.matchMedia('(pointer: fine)').matches) {
+    var fan = $('#radarFanStage');
+    if (stage && fan && window.matchMedia && window.matchMedia('(pointer: fine)').matches) {
       var rect = null;
       var onMove = function (e) {
         if (!rect) rect = stage.getBoundingClientRect();
@@ -373,13 +370,13 @@
         var cy = rect.top + rect.height / 2;
         var dx = (e.clientX - cx) / (rect.width / 2);
         var dy = (e.clientY - cy) / (rect.height / 2);
-        var rx = Math.max(-9, Math.min(9, -dy * 7));
-        var ry = Math.max(-9, Math.min(9, dx * 7));
-        backdrop.style.transform = 'translate(-50%, -50%) perspective(1000px) rotateX(' + rx.toFixed(2) + 'deg) rotateY(' + ry.toFixed(2) + 'deg)';
+        var rx = Math.max(-7, Math.min(7, -dy * 5));
+        var ry = Math.max(-7, Math.min(7, dx * 5));
+        fan.style.transform = 'perspective(900px) rotateX(' + rx.toFixed(2) + 'deg) rotateY(' + ry.toFixed(2) + 'deg)';
       };
       var onLeave = function () {
         rect = null;
-        backdrop.style.transform = 'translate(-50%, -50%) perspective(1000px) rotateX(0deg) rotateY(0deg)';
+        fan.style.transform = 'perspective(900px) rotateX(0deg) rotateY(0deg)';
       };
       stage.addEventListener('mousemove', onMove, { passive: true });
       stage.addEventListener('mouseleave', onLeave);
