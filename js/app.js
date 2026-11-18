@@ -531,7 +531,15 @@
     if (anchor && document.getElementById(anchor)) document.getElementById(anchor).scrollIntoView();
     else window.scrollTo(0, 0);
   }
+  function updateHeaderScroll() {
+    var hdr = $('.site-header');
+    if (hdr) {
+      if (window.scrollY > 24) hdr.classList.add('scrolled');
+      else hdr.classList.remove('scrolled');
+    }
+  }
   function bindHeader() {
+    updateHeaderScroll();
     var mt = $('#menuToggle'), mn = $('#mobileNav');
     if (mt && mn) {
       mt.addEventListener('click', function (e) {
@@ -557,13 +565,7 @@
       mn.classList.remove('open');
     }
   });
-  window.addEventListener('scroll', function () {
-    var hdr = $('.site-header');
-    if (hdr) {
-      if (window.scrollY > 20) hdr.classList.add('scrolled');
-      else hdr.classList.remove('scrolled');
-    }
-  }, { passive: true });
+  window.addEventListener('scroll', updateHeaderScroll, { passive: true });
 
   /* ---------- Shared tool helpers ---------- */
   function dropzone(opts) {
