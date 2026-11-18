@@ -49,10 +49,99 @@ window.ADS = {
   }
 };
 
-window.POPULAR = ['hd-photo-enhancer', 'file-translator', 'qr-code-generator', 'word-counter', 'json-formatter', 'image-compressor'];
+window.POPULAR = ['file-translator', 'hd-photo-enhancer', 'pdf-compressor', 'qr-code-generator', 'word-counter', 'json-formatter'];
 
-/* Tools — in the same order as the home page grid */
+/* Tools — in the same order as the home page grid (Top 4 Featured Tools) */
 window.TOOLS = [
+  {
+    slug: 'file-translator', name: 'File & PDF Translator (Dokumen, PDF & Subtitle)', cat: 'text', label: 'Multi-Language', icon: 'globe', ad: 'privacy',
+    desc: 'Translate PDF documents with 100% layout and image preservation, text files, Markdown, subtitles (SRT/VTT), and JSON automatically between 20+ languages.',
+    intro: 'Translate PDF documents directly with full visual layout, pictures, and page preservation, as well as TXT, Markdown (.md), Subtitles (.srt, .vtt), and JSON files between over 20 languages.',
+    keywords: 'pdf translate translite translator file dokumen subtitle srt vtt language penerjemah',
+    formats: ['PDF (.pdf)', 'Plain Text (.txt)', 'Markdown (.md)', 'Subtitles (.srt, .vtt)', 'JSON (.json)', 'CSV / Code'],
+    related: ['word-counter', 'case-converter', 'markdown-to-html'],
+    howto: [
+      ['Upload PDF or File', 'Drag & drop any PDF document, text, subtitle, or data file, or paste your text directly.'],
+      ['Select Languages', 'Choose your source and target languages (Indonesian, English, Japanese, Arabic, etc.).'],
+      ['Translate & Export', 'Auto-translates on upload, then download the result as a translated PDF or text file.']
+    ],
+    features: ['Automatic PDF text extraction and instant translation page by page', 'Export translated results directly back to PDF format (.pdf) or text (.txt)', 'Direct drag & drop for PDF, TXT, MD, SRT, VTT, JSON, and CSV files', 'Over 20 global languages with auto-detect support', 'Smart Subtitle Mode: preserves SRT/VTT timestamps while translating dialogue', 'Automatic chunking for long documents with real-time progress indicator', 'Side-by-side original and translated preview'],
+    privacy: 'Your files are processed directly in your browser using local PDF.js and WebAssembly. Translations use secure HTTPS requests without storing your files.',
+    uses: ['Translating foreign language PDF eBooks, reports, research papers, and guides.', 'Translating movie and video subtitle files (.srt, .vtt) without breaking timecodes.', 'Localizing README files, software documentation, and Markdown guides.', 'Translating business letters, articles, essays, and notes to other languages.'],
+    faq: [
+      ['Can it translate PDF documents automatically?', 'Yes! When you upload a PDF, the tool automatically extracts text from all pages and translates it directly.'],
+      ['Can I download the translated result as a PDF?', 'Yes, you can download the translation as a new PDF document or as a plain text file.'],
+      ['Will subtitle timestamps be preserved?', 'Yes! When translating .srt or .vtt files, the timing markers and line indices remain completely intact.'],
+      ['Is there a file size limit?', 'Documents are automatically chunked into manageable paragraphs so even long essays or full subtitles translate smoothly.']
+    ]
+  },
+  {
+    slug: 'hd-photo-enhancer', name: 'HD Photo Enhancer (Pembuat Foto HD & 4K)', cat: 'image', label: 'Ultra HD 4K', icon: 'sparkles', ad: 'creative',
+    desc: 'Enhance blurry photos to Ultra HD, upscale resolution up to 4x, unblur facial details, and restore colors in your browser.',
+    intro: 'Transform low-resolution, blurry, or old photos into crystal-clear High Definition (Full HD & 4K). Unblur edges, boost clarity, denoise, and upscale up to 4x with an interactive before/after split slider.',
+    keywords: 'hd photo enhancer pembuat foto hd jernih unblur upscale 4k resolution super resolution gambar penjernih',
+    formats: ['JPEG (.jpg, .jpeg)', 'PNG (.png)', 'WebP (.webp)', 'HEIC', 'BMP'],
+    related: ['image-compressor', 'image-resizer', 'png-to-jpg'],
+    howto: [
+      ['Upload Photo', 'Drag & drop any low-res or blurry photo (.jpg, .png, .webp).'],
+      ['Choose Preset or Scale', 'Select Auto HD, Face Portrait, Landscape 4K, or customize sliders.'],
+      ['Compare & Download', 'Swipe the Before/After slider to see the HD difference, then download as PNG or JPG.']
+    ],
+    features: ['Multi-scale upscaling (2x Full HD, 4x Ultra HD 4K, 1x Clarity Only)', 'Smart Unsharp Mask algorithm to restore blurry details, hair, eyes, and edges', 'Adaptive Micro-Contrast & Clarity enhancement for punchy depth', 'Noise & JPEG compression artifact suppression', 'Intelligent Vibrance and color restoration without oversaturating skin tones', 'Interactive Before / After comparison slider in real-time', 'One-click presets: Auto HD, Portrait/Face, Landscape 4K, Document Text', '100% private in-browser canvas processing (no photos sent to any server)'],
+    privacy: 'Your photos never leave your device. All upscaling, sharpening, and color enhancements run 100% client-side in your browser using HTML5 Canvas.',
+    uses: ['Making old or blurry smartphone photos crisp and clear in HD.', 'Enhancing anime, wallpapers, and digital art to 4K resolution.', 'Sharpening profile pictures, portraits, and product photos for social media & eCommerce.', 'Unblurring text and details on scanned documents and receipts.'],
+    faq: [
+      ['How does the HD Photo Enhancer work?', 'It combines stepped multi-pass bicubic upsampling, unsharp mask kernel sharpening, micro-contrast enhancement, and noise filtering directly in your browser memory.'],
+      ['What resolution can I achieve?', 'You can upscale 2x (Full HD) or 4x (Ultra HD / 4K), significantly increasing pixel dimensions and fine edge clarity.'],
+      ['Are my photos private?', 'Yes! Zero server uploads. Everything is processed directly on your laptop/phone GPU and CPU.']
+    ]
+  },
+  {
+    slug: 'pdf-compressor', name: 'PDF Compressor', cat: 'pdf', label: 'Size Reduction', icon: 'minimize', ad: 'privacy',
+    desc: 'Reduce PDF file sizes in browser memory with no file size limits, even down to a target like under 2 MB.',
+    intro: 'Reduce PDF file sizes directly in browser memory without any MB limit. Compress any size PDF down to custom targets like 2 MB, 5 MB, or maximum compression. Your documents never touch a server.',
+    keywords: 'pdf compress reduce size shrink smaller no limit unlimited mb tanpa batas',
+    formats: ['PDF (.pdf, v1.3–2.0)'],
+    accept: 'application/pdf,.pdf', maxFiles: 1,
+    dropTitle: 'Drop your PDF document here to compress',
+    dropSub: 'Tanpa batasan ukuran file (Unlimited MB) · 100% diproses privat di browser',
+    related: ['merge-pdf', 'split-pdf', 'pdf-to-jpg'],
+    howto: [
+      ['Upload PDF', 'Drop your document into the compressor (no file size limit).'],
+      ['Set a Target', 'Keep Target Size at 2 MB (or pick 500 KB–50 MB, or type any target), or choose a preset level.'],
+      ['Download', 'Save the smaller PDF to your device.']
+    ],
+    features: ['Unlimited file size: compress large PDFs of any size without restriction', 'Target Size mode: set a limit (e.g. 2 MB) and get the best quality that fits', 'Optimizes embedded images and PDF object structures', 'Shows original vs. compressed file size', 'Lossless, Recommended, and Extreme presets', 'Private handling with no server storage'],
+    privacy: 'Zero data retention: your PDF is processed in browser memory and discarded when you close the tab.',
+    uses: ['Compressing large scanned legal documents, binders, and contracts.', 'Shrinking resumes and portfolios for job portals with strict 2MB limits.', 'Reducing eBook and high-res presentation sizes for mobile and email.'],
+    faq: [
+      ['Apakah ada batasan maksimal ukuran file PDF?', 'Tidak ada batasan maksimal MB (Unlimited MB). Anda dapat mengompres file PDF ukuran berapa pun (50MB, 100MB, 500MB+) secara gratis dan aman langsung di browser.'],
+      ['Are my confidential contracts safe?', 'Yes. Processing is 100% local in your browser and nothing is uploaded or stored permanently.'],
+      ['Can it compress my PDF to under 2 MB?', 'Yes. Target Size mode tries lossless optimization first, then automatically lowers resolution and quality step by step until the file fits under your limit, keeping the highest quality that fits.'],
+      ['Will compression make text unreadable?', 'No. Lossless mode keeps text as vector data. The stronger modes render pages at a print-friendly resolution so text stays clear.']
+    ]
+  },
+  {
+    slug: 'qr-code-generator', name: 'QR Code Generator', cat: 'image', label: 'Instant Generator', icon: 'qr', ad: 'creative',
+    desc: 'Create customizable high-res QR codes for URLs, text, contacts, or Wi-Fi.',
+    intro: 'Create customizable high-resolution QR codes for URLs, text, contacts, or Wi-Fi.',
+    keywords: 'qr code generator url wifi link barcode',
+    formats: ['PNG', 'SVG'],
+    related: ['jpg-to-png', 'image-resizer', 'json-formatter'],
+    howto: [
+      ['Choose Type', 'Pick URL, Plain Text, Wi-Fi, or Email.'],
+      ['Enter Details', 'Type a link, message, or network credentials.'],
+      ['Customize & Download', 'Pick colors and error correction, then download as PNG or SVG.']
+    ],
+    features: ['Live preview while you type', 'Presets for URL, text, Wi-Fi, and email', 'Custom foreground and background color pickers', 'PNG and SVG download options', 'Four error-correction levels (L, M, Q, H)'],
+    privacy: 'Codes are created locally using the browser canvas. Text and Wi-Fi passwords are never transmitted.',
+    uses: ['Restaurant menus and tabletop scan-to-order codes.', 'Wi-Fi guest access codes for offices, cafes, and homes.', 'Scannable links on business cards, flyers, and event badges.'],
+    faq: [
+      ['Do the QR codes expire?', 'No. They are static codes that contain your raw text or URL, so they work forever.'],
+      ['Can I use them commercially?', 'Yes. They are free for personal and commercial use with no licensing fees.'],
+      ['Is SVG supported?', 'Yes. Download a vector SVG for high-quality printing on posters, flyers, or merchandise.']
+    ]
+  },
   {
     slug: 'word-counter', name: 'Word Counter', cat: 'text', label: 'Instant Analysis', icon: 'type', ad: 'privacy',
     desc: 'Count words, characters, sentences, paragraphs, and reading time in real time.',
@@ -215,31 +304,6 @@ window.TOOLS = [
     ]
   },
   {
-    slug: 'pdf-compressor', name: 'PDF Compressor', cat: 'pdf', label: 'Size Reduction', icon: 'minimize', ad: 'privacy',
-    desc: 'Reduce PDF file sizes in browser memory with no file size limits, even down to a target like under 2 MB.',
-    intro: 'Reduce PDF file sizes directly in browser memory without any MB limit. Compress any size PDF down to custom targets like 2 MB, 5 MB, or maximum compression. Your documents never touch a server.',
-    keywords: 'pdf compress reduce size shrink smaller no limit unlimited mb tanpa batas',
-    formats: ['PDF (.pdf, v1.3–2.0)'],
-    accept: 'application/pdf,.pdf', maxFiles: 1,
-    dropTitle: 'Drop your PDF document here to compress',
-    dropSub: 'Tanpa batasan ukuran file (Unlimited MB) · 100% diproses privat di browser',
-    related: ['merge-pdf', 'split-pdf', 'pdf-to-jpg'],
-    howto: [
-      ['Upload PDF', 'Drop your document into the compressor (no file size limit).'],
-      ['Set a Target', 'Keep Target Size at 2 MB (or pick 500 KB–50 MB, or type any target), or choose a preset level.'],
-      ['Download', 'Save the smaller PDF to your device.']
-    ],
-    features: ['Unlimited file size: compress large PDFs of any size without restriction', 'Target Size mode: set a limit (e.g. 2 MB) and get the best quality that fits', 'Optimizes embedded images and PDF object structures', 'Shows original vs. compressed file size', 'Lossless, Recommended, and Extreme presets', 'Private handling with no server storage'],
-    privacy: 'Zero data retention: your PDF is processed in browser memory and discarded when you close the tab.',
-    uses: ['Compressing large scanned legal documents, binders, and contracts.', 'Shrinking resumes and portfolios for job portals with strict 2MB limits.', 'Reducing eBook and high-res presentation sizes for mobile and email.'],
-    faq: [
-      ['Apakah ada batasan maksimal ukuran file PDF?', 'Tidak ada batasan maksimal MB (Unlimited MB). Anda dapat mengompres file PDF ukuran berapa pun (50MB, 100MB, 500MB+) secara gratis dan aman langsung di browser.'],
-      ['Are my confidential contracts safe?', 'Yes. Processing is 100% local in your browser and nothing is uploaded or stored permanently.'],
-      ['Can it compress my PDF to under 2 MB?', 'Yes. Target Size mode tries lossless optimization first, then automatically lowers resolution and quality step by step until the file fits under your limit, keeping the highest quality that fits.'],
-      ['Will compression make text unreadable?', 'No. Lossless mode keeps text as vector data. The stronger modes render pages at a print-friendly resolution so text stays clear.']
-    ]
-  },
-  {
     slug: 'pdf-to-jpg', name: 'PDF to JPG Converter', cat: 'pdf', label: 'Page Extraction', icon: 'fileImage', ad: 'privacy',
     desc: 'Convert PDF pages to high-resolution JPG images client-side, with no file limits.',
     intro: 'Convert PDF pages to high-resolution JPG images client-side, with no file limits.',
@@ -307,27 +371,6 @@ window.TOOLS = [
       ['Does splitting reduce quality?', 'No. Pages are copied exactly as they are, so text stays sharp and selectable.'],
       ['How do I write page ranges?', 'Use commas and dashes: "1-3, 5, 8-10". "8-" means page 8 to the end. In Split by Ranges mode, each comma group becomes its own PDF.'],
       ['Can I change the page order?', 'Pages are saved in the order you type them in the range box, so "5, 1-3" puts page 5 first. Clicking thumbnails keeps the original order.']
-    ]
-  },
-  {
-    slug: 'qr-code-generator', name: 'QR Code Generator', cat: 'image', label: 'Instant Generator', icon: 'qr', ad: 'creative',
-    desc: 'Create customizable high-res QR codes for URLs, text, contacts, or Wi-Fi.',
-    intro: 'Create customizable high-resolution QR codes for URLs, text, contacts, or Wi-Fi.',
-    keywords: 'qr code generator url wifi link barcode',
-    formats: ['PNG', 'SVG'],
-    related: ['jpg-to-png', 'image-resizer', 'json-formatter'],
-    howto: [
-      ['Choose Type', 'Pick URL, Plain Text, Wi-Fi, or Email.'],
-      ['Enter Details', 'Type a link, message, or network credentials.'],
-      ['Customize & Download', 'Pick colors and error correction, then download as PNG or SVG.']
-    ],
-    features: ['Live preview while you type', 'Presets for URL, text, Wi-Fi, and email', 'Custom foreground and background color pickers', 'PNG and SVG download options', 'Four error-correction levels (L, M, Q, H)'],
-    privacy: 'Codes are created locally using the browser canvas. Text and Wi-Fi passwords are never transmitted.',
-    uses: ['Restaurant menus and tabletop scan-to-order codes.', 'Wi-Fi guest access codes for offices, cafes, and homes.', 'Scannable links on business cards, flyers, and event badges.'],
-    faq: [
-      ['Do the QR codes expire?', 'No. They are static codes that contain your raw text or URL, so they work forever.'],
-      ['Can I use them commercially?', 'Yes. They are free for personal and commercial use with no licensing fees.'],
-      ['Is SVG supported?', 'Yes. Download a vector SVG for high-quality printing on posters, flyers, or merchandise.']
     ]
   },
   {
@@ -499,49 +542,6 @@ window.TOOLS = [
       ['Is this generator truly random?', 'Yes. It uses crypto.getRandomValues(), the modern standard for cryptographically secure pseudo-random number generation (CSPRNG).'],
       ['Can I generate numbers without duplicates?', 'Yes. Check "Unique Only" to ensure every generated number in the batch is distinct.'],
       ['Can I access this via /tools/rng?', 'Yes, /tools/rng and /tools/random-number-generator both open this tool directly.']
-    ]
-  },
-  {
-    slug: 'file-translator', name: 'File & PDF Translator (Dokumen, PDF & Subtitle)', cat: 'text', label: 'Multi-Language', icon: 'globe', ad: 'privacy',
-    desc: 'Translate PDF documents with 100% layout and image preservation, text files, Markdown, subtitles (SRT/VTT), and JSON automatically between 20+ languages.',
-    intro: 'Translate PDF documents directly with full visual layout, pictures, and page preservation, as well as TXT, Markdown (.md), Subtitles (.srt, .vtt), and JSON files between over 20 languages.',
-    keywords: 'pdf translate translite translator file dokumen subtitle srt vtt language penerjemah',
-    formats: ['PDF (.pdf)', 'Plain Text (.txt)', 'Markdown (.md)', 'Subtitles (.srt, .vtt)', 'JSON (.json)', 'CSV / Code'],
-    related: ['word-counter', 'case-converter', 'markdown-to-html'],
-    howto: [
-      ['Upload PDF or File', 'Drag & drop any PDF document, text, subtitle, or data file, or paste your text directly.'],
-      ['Select Languages', 'Choose your source and target languages (Indonesian, English, Japanese, Arabic, etc.).'],
-      ['Translate & Export', 'Auto-translates on upload, then download the result as a translated PDF or text file.']
-    ],
-    features: ['Automatic PDF text extraction and instant translation page by page', 'Export translated results directly back to PDF format (.pdf) or text (.txt)', 'Direct drag & drop for PDF, TXT, MD, SRT, VTT, JSON, and CSV files', 'Over 20 global languages with auto-detect support', 'Smart Subtitle Mode: preserves SRT/VTT timestamps while translating dialogue', 'Automatic chunking for long documents with real-time progress indicator', 'Side-by-side original and translated preview'],
-    privacy: 'Your files are processed directly in your browser using local PDF.js and WebAssembly. Translations use secure HTTPS requests without storing your files.',
-    uses: ['Translating foreign language PDF eBooks, reports, research papers, and guides.', 'Translating movie and video subtitle files (.srt, .vtt) without breaking timecodes.', 'Localizing README files, software documentation, and Markdown guides.', 'Translating business letters, articles, essays, and notes to other languages.'],
-    faq: [
-      ['Can it translate PDF documents automatically?', 'Yes! When you upload a PDF, the tool automatically extracts text from all pages and translates it directly.'],
-      ['Can I download the translated result as a PDF?', 'Yes, you can download the translation as a new PDF document or as a plain text file.'],
-      ['Will subtitle timestamps be preserved?', 'Yes! When translating .srt or .vtt files, the timing markers and line indices remain completely intact.'],
-      ['Is there a file size limit?', 'Documents are automatically chunked into manageable paragraphs so even long essays or full subtitles translate smoothly.']
-    ]
-  },
-  {
-    slug: 'hd-photo-enhancer', name: 'HD Photo Enhancer (Pembuat Foto HD & 4K)', cat: 'image', label: 'Ultra HD 4K', icon: 'sparkles', ad: 'creative',
-    desc: 'Enhance blurry photos to Ultra HD, upscale resolution up to 4x, unblur facial details, and restore colors in your browser.',
-    intro: 'Transform low-resolution, blurry, or old photos into crystal-clear High Definition (Full HD & 4K). Unblur edges, boost clarity, denoise, and upscale up to 4x with an interactive before/after split slider.',
-    keywords: 'hd photo enhancer pembuat foto hd jernih unblur upscale 4k resolution super resolution gambar penjernih',
-    formats: ['JPEG (.jpg, .jpeg)', 'PNG (.png)', 'WebP (.webp)', 'HEIC', 'BMP'],
-    related: ['image-compressor', 'image-resizer', 'png-to-jpg'],
-    howto: [
-      ['Upload Photo', 'Drag & drop any low-res or blurry photo (.jpg, .png, .webp).'],
-      ['Choose Preset or Scale', 'Select Auto HD, Face Portrait, Landscape 4K, or customize sliders.'],
-      ['Compare & Download', 'Swipe the Before/After slider to see the HD difference, then download as PNG or JPG.']
-    ],
-    features: ['Multi-scale upscaling (2x Full HD, 4x Ultra HD 4K, 1x Clarity Only)', 'Smart Unsharp Mask algorithm to restore blurry details, hair, eyes, and edges', 'Adaptive Micro-Contrast & Clarity enhancement for punchy depth', 'Noise & JPEG compression artifact suppression', 'Intelligent Vibrance and color restoration without oversaturating skin tones', 'Interactive Before / After comparison slider in real-time', 'One-click presets: Auto HD, Portrait/Face, Landscape 4K, Document Text', '100% private in-browser canvas processing (no photos sent to any server)'],
-    privacy: 'Your photos never leave your device. All upscaling, sharpening, and color enhancements run 100% client-side in your browser using HTML5 Canvas.',
-    uses: ['Making old or blurry smartphone photos crisp and clear in HD.', 'Enhancing anime, wallpapers, and digital art to 4K resolution.', 'Sharpening profile pictures, portraits, and product photos for social media & eCommerce.', 'Unblurring text and details on scanned documents and receipts.'],
-    faq: [
-      ['How does the HD Photo Enhancer work?', 'It combines stepped multi-pass bicubic upsampling, unsharp mask kernel sharpening, micro-contrast enhancement, and noise filtering directly in your browser memory.'],
-      ['What resolution can I achieve?', 'You can upscale 2x (Full HD) or 4x (Ultra HD / 4K), significantly increasing pixel dimensions and fine edge clarity.'],
-      ['Are my photos private?', 'Yes! Zero server uploads. Everything is processed directly on your laptop/phone GPU and CPU.']
     ]
   }
 ];
