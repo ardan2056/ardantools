@@ -269,11 +269,11 @@
       '<div class="hero-eyebrow"><span class="spark">' + icon('sparkles', 'icon-sm') + '</span>Fast · 100% Free · Private · Zero Signup</div>' +
       '<h1>Essential Online Utilities, <span class="grad-text">Zero Server Uploads.</span></h1>' +
       '<p class="lead">Convert, compress, resize, format, and generate content directly in your browser. Your files never leave your device.</p>' +
+      '<div class="hero-trust-bar"><span class="ht-item">' + icon('checkCircle', 'icon-sm') + '100% Free</span><span class="ht-sep">•</span><span class="ht-item">' + icon('shieldCheck', 'icon-sm') + 'No Registration</span><span class="ht-sep">•</span><span class="ht-item">' + icon('zap', 'icon-sm') + 'Client-Side</span></div>' +
       '<div class="hero-cta"><a href="#all-tools" class="btn btn-primary btn-lg" id="exploreBtn">' + icon('grid') + 'Explore All Tools</a>' + L('/about', 'How it works', 'btn btn-lg') + '</div>' +
-      '<div class="hero-badges"><span class="hero-badge">' + icon('checkCircle', 'icon-sm') + '100% Free Forever</span><span class="hero-badge">' + icon('checkCircle', 'icon-sm') + 'No Registration Required</span><span class="hero-badge">' + icon('checkCircle', 'icon-sm') + 'Client-Side Execution</span></div>' +
       '</div></section>' +
-      '<section class="section" id="all-tools"><div class="container">' +
-      '<div class="section-head"><span class="kicker">Tool Directory</span><h2>All Free Utilities</h2><p>Select any tool to start instant, private processing.</p></div>' +
+      '<section class="section section-tools" id="all-tools"><div class="container">' +
+      '<div class="section-head"><span class="kicker">' + icon('grid', 'icon-sm') + 'Tool Directory</span><h2>All Free Utilities</h2><p>Select any tool to start instant, private processing.</p></div>' +
       '<div class="tool-search">' + icon('search') + '<input type="search" id="toolSearch" placeholder="Search tools… e.g. compress image, pdf, json, svg, uuid" autocomplete="off" aria-label="Search tools"><button class="clear-search" id="clearSearch" aria-label="Clear search">' + icon('x') + '</button></div>' +
       '<div class="filter-tabs" role="tablist">' + tabs.map(function (t, i) {
         return '<button class="filter-tab' + (i === 0 ? ' active' : '') + '" data-filter="' + t[0] + '" role="tab">' + t[1] + '<span class="count">' + counts[t[0]] + '</span></button>';
