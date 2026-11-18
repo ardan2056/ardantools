@@ -195,20 +195,20 @@
   /* ---------- Layout ---------- */
   var LOGO = '<span style="font-weight:800;font-size:19px;line-height:1;letter-spacing:-.04em">A</span>';
   function header(active) {
-    var nav = Object.keys(CATEGORIES).map(function (k) {
-      return L('/categories/' + k, esc(CATEGORIES[k].name), active === k ? 'active' : '');
-    }).join('');
-    var mob = Object.keys(CATEGORIES).map(function (k) {
-      return L('/categories/' + k, icon(CATEGORIES[k].icon) + esc(CATEGORIES[k].navLabel));
-    }).join('') + L('/about', icon('info') + 'About') + L('/contact', icon('mail') + 'Contact');
-    return '<header class="site-header"><div class="container header-inner">' +
+    var nav = L('/', 'Beranda', active === '' || active === 'home' ? 'active' : '') +
+      Object.keys(CATEGORIES).map(function (k) {
+        return L('/categories/' + k, esc(CATEGORIES[k].name), active === k ? 'active' : '');
+      }).join('') +
+      L('/about', 'Tentang', active === 'about' ? 'active' : '');
+    var mob = L('/', icon('grid') + 'Beranda') +
+      Object.keys(CATEGORIES).map(function (k) {
+        return L('/categories/' + k, icon(CATEGORIES[k].icon) + esc(CATEGORIES[k].navLabel));
+      }).join('') + L('/about', icon('info') + 'Tentang') + L('/contact', icon('mail') + 'Kontak');
+    return '<header class="site-header"><div class="header-inner">' +
       L('/', '<span class="logo-mark">' + LOGO + '</span><span class="logo-text"><span class="logo-name">' + esc(SITE.name) + '</span><span class="logo-tag">' + esc(SITE.tagline) + '</span></span>', 'logo', ' aria-label="' + esc(SITE.name) + ' home"') +
       '<nav class="main-nav" aria-label="Categories">' + nav + '</nav>' +
       '<div class="header-right">' +
-      '<span class="pill pill-green" title="All processing happens in your browser"><span class="dot"></span>Browser-Only</span>' +
-      '<div class="lang-menu"><button class="pill lang-btn" id="langBtn" aria-haspopup="true">' + icon('globe', 'icon-sm') + 'EN' + icon('chevronDown', 'icon-sm') + '</button>' +
-      '<div class="lang-pop" id="langPop"><button type="button">English ' + icon('check', 'icon-sm') + '</button></div></div>' +
-      L('/about', 'About', 'header-about') +
+      '<a href="/#all-tools" class="nav-cta-btn" id="navExploreBtn"><span>Explore Tools</span>' + icon('sparkles', 'icon-sm') + '</a>' +
       '<button class="menu-toggle" id="menuToggle" aria-label="Open menu">' + icon('menu') + '</button>' +
       '</div></div><nav class="mobile-nav" id="mobileNav">' + mob + '</nav></header>';
   }
@@ -456,12 +456,38 @@
     else window.scrollTo(0, 0);
   }
   function bindHeader() {
-    var mt = $('#menuToggle'), mn = $('#mobileNav'), lb = $('#langBtn'), lp = $('#langPop');
-    if (mt) mt.addEventListener('click', function () { mn.classList.toggle('open'); });
-    if (lb) lb.addEventListener('click', function (e) { e.stopPropagation(); lp.classList.toggle('open'); });
-    if (lp) lp.addEventListener('click', function () { lp.classList.remove('open'); });
+    var mt = $('#menuToggle'), mn = $('#mobileNav');
+    if (mt && mn) {
+      mt.addEventListener('click', function (e) {
+        e.stopPropagation();
+        mn.classList.toggle('open');
+      });
+    }
+    var nb = $('#navExploreBtn');
+    if (nb) {
+      nb.addEventListener('click', function (e) {
+        var target = document.getElementById('all-tools');
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: 'smooth' });
+        }
+      });
+    }
   }
-  document.addEventListener('click', function () { var lp = $('#langPop'); if (lp) lp.classList.remove('open'); });
+  document.addEventListener('click', function (e) {
+    var mn = $('#mobileNav');
+    var mt = $('#menuToggle');
+    if (mn && mn.classList.contains('open') && !mn.contains(e.target) && e.target !== mt) {
+      mn.classList.remove('open');
+    }
+  });
+  window.addEventListener('scroll', function () {
+    var hdr = $('.site-header');
+    if (hdr) {
+      if (window.scrollY > 20) hdr.classList.add('scrolled');
+      else hdr.classList.remove('scrolled');
+    }
+  }, { passive: true });
 
   /* ---------- Shared tool helpers ---------- */
   function dropzone(opts) {
