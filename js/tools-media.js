@@ -453,7 +453,7 @@
       extreme: { name: 'Extreme', desc: 'Re-renders pages at 96 DPI with strong compression. Smallest files; best for screens.', dpi: 96, q: 0.5 }
     };
     root.innerHTML = '<div id="pcDrop"></div><div id="pcBody"></div>';
-    var drop = F.dropzone({ accept: t.accept, maxMB: t.maxMB, maxFiles: 1, title: t.dropTitle, sub: t.dropSub, test: function (f) { return /pdf/i.test(f.type) || /\.pdf$/i.test(f.name); }, onFiles: function (fs) { file = fs[0]; out = null; note = ''; draw(); } });
+    var drop = F.dropzone({ accept: t.accept, maxMB: 0, maxFiles: 1, title: t.dropTitle, sub: t.dropSub, test: function (f) { return /pdf/i.test(f.type) || /\.pdf$/i.test(f.name); }, onFiles: function (fs) { file = fs[0]; out = null; note = ''; draw(); } });
     F.$('#pcDrop', root).appendChild(drop);
     function targetBytes() { return Math.round(targetMB * 1024 * 1024); }
     function draw() {
@@ -475,9 +475,9 @@
           var L = LEVELS[k];
           return '<button class="btn' + (k === level ? ' btn-primary' : '') + '" data-level="' + k + '" style="flex-direction:column;align-items:flex-start;white-space:normal;text-align:left;padding:14px;height:100%"><strong>' + L.name + (k === 'target' ? ' ★' : '') + '</strong><span style="font-weight:500;font-size:12.5px;opacity:.85">' + L.desc + '</span></button>';
         }).join('') + '</div></div>' +
-        (level === 'target' ? '<div class="toolbar" style="margin-top:14px;gap:10px"><label class="label" for="pcTarget">Maximum file size</label>' +
-          '<div class="color-input" style="padding:0 10px 0 0"><input class="input" type="number" id="pcTarget" min="0.1" max="500" step="0.1" value="' + targetMB + '" style="width:90px;border:0;box-shadow:none"><span class="meta" style="font-weight:700">MB</span></div>' +
-          [0.5, 1, 2, 5, 10].map(function (m) { return '<button class="btn btn-sm' + (m === targetMB ? ' btn-dark' : '') + '" data-mb="' + m + '">' + (m < 1 ? '500 KB' : m + ' MB') + '</button>'; }).join('') + '</div>' : '') +
+        (level === 'target' ? '<div class="toolbar" style="margin-top:14px;gap:10px;flex-wrap:wrap"><label class="label" for="pcTarget">Target size</label>' +
+          '<div class="color-input" style="padding:0 10px 0 0"><input class="input" type="number" id="pcTarget" min="0.1" max="5000" step="0.1" value="' + targetMB + '" style="width:90px;border:0;box-shadow:none"><span class="meta" style="font-weight:700">MB</span></div>' +
+          [0.5, 1, 2, 5, 10, 20, 50].map(function (m) { return '<button class="btn btn-sm' + (m === targetMB ? ' btn-dark' : '') + '" data-mb="' + m + '">' + (m < 1 ? '500 KB' : m + ' MB') + '</button>'; }).join('') + '</div>' : '') +
         '<div id="pcProg"></div>' + res +
         '<div class="list-footer"><span class="summary">' + (out ? 'Ready to download' : level === 'target' ? 'Compress to under ' + targetMB + ' MB' : 'Choose a level, then compress') + '</span><div class="toolbar">' +
         '<button class="btn" data-act="reset">' + icon('upload') + 'Choose Another PDF</button>' +
