@@ -533,12 +533,19 @@
     if (anchor && document.getElementById(anchor)) document.getElementById(anchor).scrollIntoView();
     else window.scrollTo(0, 0);
   }
+  var isScrollTicking = false;
   function updateHeaderScroll() {
-    var hdr = $('.site-header');
-    if (hdr) {
-      if (window.scrollY > 24) hdr.classList.add('scrolled');
-      else hdr.classList.remove('scrolled');
-    }
+    if (isScrollTicking) return;
+    isScrollTicking = true;
+    window.requestAnimationFrame(function () {
+      var hdr = $('.site-header');
+      if (hdr) {
+        var y = window.scrollY || window.pageYOffset || 0;
+        if (y > 35) hdr.classList.add('scrolled');
+        else if (y < 15) hdr.classList.remove('scrolled');
+      }
+      isScrollTicking = false;
+    });
   }
   function bindHeader() {
     updateHeaderScroll();
