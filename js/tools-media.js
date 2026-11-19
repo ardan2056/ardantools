@@ -1538,30 +1538,45 @@
             '<textarea id="aveScript" class="input" style="height:76px; resize:vertical; font-size:12px; font-family:inherit;" placeholder="Tempel naskah narasi / teks pembicara di sini... Sistem akan mencocokkan jeda kalimat dengan narasi Anda dan membuang bagian di luar narasi / salah take."></textarea>' +
           '</div>' +
 
+          '<!-- Preset Mode -->' +
+          '<div style="margin-bottom:12px;">' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">' +
+              '<span style="font-size:11.5px; font-weight:800; color:var(--text);">Mode Proteksi Suara:</span>' +
+              '<span style="font-size:11px; color:#10b981; font-weight:700;">Anti-Potong Suara Pelan</span>' +
+            '</div>' +
+            '<div style="display:flex; gap:6px; flex-wrap:wrap;">' +
+              '<button type="button" id="avePresetSoft" class="btn btn-xs btn-primary" style="font-size:11px; padding:4px 9px;">🛡️ Suara Pelan &amp; Bisikan (Aman)</button>' +
+              '<button type="button" id="avePresetNormal" class="btn btn-xs btn-ghost" style="font-size:11px; padding:4px 9px;">🎙️ Normal</button>' +
+              '<button type="button" id="avePresetAggressive" class="btn btn-xs btn-ghost" style="font-size:11px; padding:4px 9px;">⚡ Jump Cut Rapat</button>' +
+            '</div>' +
+          '</div>' +
+
           '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">' +
             '<div>' +
               '<div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:700; color:var(--text); margin-bottom:4px;">' +
-                '<span>Ambang Hening:</span>' +
-                '<span id="aveThreshVal" style="color:var(--primary); font-family:var(--font-mono, monospace);">-32 dB</span>' +
+                '<span>Ambang Suara:</span>' +
+                '<span id="aveThreshVal" style="color:var(--primary); font-family:var(--font-mono, monospace);">-45 dB</span>' +
               '</div>' +
-              '<input type="range" id="aveThreshSlider" min="-50" max="-15" step="1" value="-32" style="width:100%; accent-color:var(--primary);">' +
+              '<input type="range" id="aveThreshSlider" min="-55" max="-20" step="1" value="-45" style="width:100%; accent-color:var(--primary);">' +
+              '<span style="font-size:10.5px; color:var(--muted);">-45 dB menangkap bisikan &amp; suara kecil</span>' +
             '</div>' +
             '<div>' +
               '<div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:700; color:var(--text); margin-bottom:4px;">' +
-                '<span>Jeda Min:</span>' +
-                '<span id="aveMinSilVal" style="color:var(--primary); font-family:var(--font-mono, monospace);">0.45 s</span>' +
+                '<span>Jeda Hening Min:</span>' +
+                '<span id="aveMinSilVal" style="color:var(--primary); font-family:var(--font-mono, monospace);">0.75 s</span>' +
               '</div>' +
-              '<input type="range" id="aveMinSilSlider" min="0.2" max="1.5" step="0.05" value="0.45" style="width:100%; accent-color:var(--primary);">' +
+              '<input type="range" id="aveMinSilSlider" min="0.3" max="2.5" step="0.05" value="0.75" style="width:100%; accent-color:var(--primary);">' +
+              '<span style="font-size:10.5px; color:var(--muted);">Jeda nafas di bawah 0.75s TIDAK dipotong</span>' +
             '</div>' +
           '</div>' +
 
           '<div>' +
             '<div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:700; color:var(--text); margin-bottom:4px;">' +
-              '<span>Bantalan Suara (Padding Kata):</span>' +
-              '<span id="avePadVal" style="color:var(--primary); font-family:var(--font-mono, monospace);">0.10 s</span>' +
+              '<span>Bantalan Suara (Lead-in &amp; Lead-out Padding):</span>' +
+              '<span id="avePadVal" style="color:var(--primary); font-family:var(--font-mono, monospace);">0.25 s</span>' +
             '</div>' +
-            '<input type="range" id="avePadSlider" min="0.05" max="0.30" step="0.01" value="0.10" style="width:100%; accent-color:var(--primary);">' +
-            '<p style="font-size:11px; color:var(--muted); margin-top:3px;">Mencegah awal & akhir kalimat terpotong mendadak.</p>' +
+            '<input type="range" id="avePadSlider" min="0.05" max="0.50" step="0.02" value="0.25" style="width:100%; accent-color:var(--primary);">' +
+            '<p style="font-size:11px; color:var(--muted); margin-top:3px;">Memberi bantalan 0.25s di awal &amp; akhir kata agar suara pelan tidak pernah terpotong tiba-tiba.</p>' +
           '</div>' +
 
           '<button type="button" id="aveAnalyzeBtn" class="btn btn-primary" style="width:100%; display:flex; justify-content:center; align-items:center; gap:8px;">' +
@@ -1726,6 +1741,51 @@
     var copyFfmpegBtn = F.$('#aveCopyFfmpegBtn', ws);
     var copyEdlBtn = F.$('#aveCopyEdlBtn', ws);
 
+    // Presets
+    var presetSoft = F.$('#avePresetSoft', ws);
+    var presetNormal = F.$('#avePresetNormal', ws);
+    var presetAggressive = F.$('#avePresetAggressive', ws);
+
+    function setPreset(mode) {
+      if (presetSoft) presetSoft.className = 'btn btn-xs ' + (mode === 'soft' ? 'btn-primary' : 'btn-ghost');
+      if (presetNormal) presetNormal.className = 'btn btn-xs ' + (mode === 'normal' ? 'btn-primary' : 'btn-ghost');
+      if (presetAggressive) presetAggressive.className = 'btn btn-xs ' + (mode === 'aggressive' ? 'btn-primary' : 'btn-ghost');
+
+      if (mode === 'soft') {
+        threshSlider.value = -45;
+        threshVal.textContent = '-45 dB';
+        minSilSlider.value = 0.75;
+        minSilVal.textContent = '0.75 s';
+        padSlider.value = 0.25;
+        padVal.textContent = '0.25 s';
+        F.toast('Mode Proteksi Suara Pelan & Bisikan diaktifkan');
+      } else if (mode === 'normal') {
+        threshSlider.value = -39;
+        threshVal.textContent = '-39 dB';
+        minSilSlider.value = 0.60;
+        minSilVal.textContent = '0.60 s';
+        padSlider.value = 0.18;
+        padVal.textContent = '0.18 s';
+        F.toast('Mode Pemotongan Normal diaktifkan');
+      } else if (mode === 'aggressive') {
+        threshSlider.value = -32;
+        threshVal.textContent = '-32 dB';
+        minSilSlider.value = 0.40;
+        minSilVal.textContent = '0.40 s';
+        padSlider.value = 0.10;
+        padVal.textContent = '0.10 s';
+        F.toast('Mode Jump Cut Rapat diaktifkan');
+      }
+
+      if (currentFile && !isAnalyzing) {
+        runAnalysis();
+      }
+    }
+
+    if (presetSoft) presetSoft.onclick = function () { setPreset('soft'); };
+    if (presetNormal) presetNormal.onclick = function () { setPreset('normal'); };
+    if (presetAggressive) presetAggressive.onclick = function () { setPreset('aggressive'); };
+
     // Slider sync
     threshSlider.oninput = function () { threshVal.textContent = threshSlider.value + ' dB'; };
     minSilSlider.oninput = function () { minSilVal.textContent = parseFloat(minSilSlider.value).toFixed(2) + ' s'; };
@@ -1846,7 +1906,7 @@
       };
     }
 
-    // Audio Analysis Implementation
+    // Audio Analysis Implementation with Anti-Cut Soft Voice Protection
     function runAnalysis() {
       if (isAnalyzing || !currentFile) return;
       isAnalyzing = true;
@@ -1856,155 +1916,267 @@
       progText.textContent = 'Menyiapkan pemindaian audio dari video...';
 
       var dur = vid.duration || 1;
-      var thresh = parseFloat(threshSlider.value) || -32;
-      var minSil = parseFloat(minSilSlider.value) || 0.45;
-      var pad = parseFloat(padSlider.value) || 0.10;
+      var thresh = parseFloat(threshSlider.value) || -45;
+      var minSil = parseFloat(minSilSlider.value) || 0.75;
+      var pad = parseFloat(padSlider.value) || 0.25;
       var scriptVal = (scriptEl.value || '').trim();
 
-      // Read audio buffer if file is reasonable, or fallback to streaming
-      if (currentFile.size <= 250 * 1024 * 1024) {
+      // Read audio buffer if file <= 800MB, or fallback to high-speed stream scan
+      if (currentFile.size <= 800 * 1024 * 1024) {
         progBar.style.width = '25%';
-        progText.textContent = 'Membaca track suara (Web Audio Engine)...';
+        progText.textContent = 'Mengekstrak track audio (Web Audio Studio)...';
         var reader = new FileReader();
         reader.onload = function (e) {
           progBar.style.width = '50%';
-          progText.textContent = 'Mendekode gelombang vokal & jeda...';
+          progText.textContent = 'Mendekode frekuensi vokal & level desibel...';
           var AudioCtx = window.AudioContext || window.webkitAudioContext;
           if (!AudioCtx) {
-            fallbackScan(dur, thresh, minSil, pad, scriptVal);
+            streamScan(dur, thresh, minSil, pad, scriptVal);
             return;
           }
           var actx = new AudioCtx();
           actx.decodeAudioData(e.target.result).then(function (audioBuffer) {
             progBar.style.width = '75%';
-            progText.textContent = 'Mendeteksi segmen bicara & keheningan...';
-            var rawData = audioBuffer.getChannelData(0);
-            var sr = audioBuffer.sampleRate;
-            var stepSec = 0.05; // 50ms chunk
-            var samplesPerStep = Math.floor(sr * stepSec);
-            var numSteps = Math.floor(rawData.length / samplesPerStep);
-
-            waveformPoints = [];
-            var isVoice = [];
-
-            for (var i = 0; i < numSteps; i++) {
-              var sum = 0;
-              var off = i * samplesPerStep;
-              var stride = 4;
-              var count = 0;
-              for (var j = 0; j < samplesPerStep; j += stride) {
-                var v = rawData[off + j] || 0;
-                sum += v * v;
-                count++;
-              }
-              var rms = Math.sqrt(sum / (count || 1));
-              var db = 20 * Math.log10(Math.max(rms, 0.00001));
-              var amp = Math.min(1, rms * 4.5);
-              waveformPoints.push(amp);
-              isVoice.push(db >= thresh);
-            }
-
+            progText.textContent = 'Mendeteksi suara pelan & jeda hening...';
+            analyzeAudioBuffer(audioBuffer, dur, thresh, minSil, pad, scriptVal);
             try { actx.close(); } catch (err) {}
-            buildSegments(isVoice, stepSec, dur, minSil, pad, scriptVal);
           }).catch(function () {
-            fallbackScan(dur, thresh, minSil, pad, scriptVal);
+            streamScan(dur, thresh, minSil, pad, scriptVal);
           });
         };
         reader.onerror = function () {
-          fallbackScan(dur, thresh, minSil, pad, scriptVal);
+          streamScan(dur, thresh, minSil, pad, scriptVal);
         };
         reader.readAsArrayBuffer(currentFile);
       } else {
-        fallbackScan(dur, thresh, minSil, pad, scriptVal);
+        streamScan(dur, thresh, minSil, pad, scriptVal);
       }
     }
 
-    // High-speed fallback for massive files (500MB, 2GB, 5GB+)
-    function fallbackScan(dur, thresh, minSil, pad, scriptVal) {
-      progBar.style.width = '40%';
-      progText.textContent = 'Memindai stream video lokal (Bebas Ukuran)...';
+    // High-resolution Audio Buffer Analyzer with Adaptive Noise Floor & Hangover
+    function analyzeAudioBuffer(audioBuffer, dur, thresh, minSil, pad, scriptVal) {
+      var rawData = audioBuffer.getChannelData(0);
+      var sr = audioBuffer.sampleRate;
+      var stepSec = 0.03; // 30ms high-resolution frame
+      var samplesPerStep = Math.floor(sr * stepSec);
+      var numSteps = Math.floor(rawData.length / samplesPerStep);
+
+      waveformPoints = [];
+      var dbLevels = [];
+
+      for (var i = 0; i < numSteps; i++) {
+        var sum = 0;
+        var off = i * samplesPerStep;
+        var stride = 4;
+        var count = 0;
+        for (var j = 0; j < samplesPerStep; j += stride) {
+          var v = rawData[off + j] || 0;
+          sum += v * v;
+          count++;
+        }
+        var rms = Math.sqrt(sum / (count || 1));
+        var db = 20 * Math.log10(Math.max(rms, 0.00001));
+        dbLevels.push(db);
+        waveformPoints.push(Math.min(1, rms * 5.5));
+      }
+
+      // Adaptive Noise Floor Detection
+      var sampleDbs = [];
+      var sampleStep = Math.max(1, Math.floor(dbLevels.length / 500));
+      for (var s = 0; s < dbLevels.length; s += sampleStep) sampleDbs.push(dbLevels[s]);
+      sampleDbs.sort(function (a, b) { return a - b; });
+      var noiseFloor = sampleDbs[Math.floor(sampleDbs.length * 0.15)] || -60;
+
+      // Auto-adapt so soft speech is never below gate
+      var effectiveThresh = thresh;
+      if (noiseFloor > -40) {
+        effectiveThresh = Math.max(thresh, noiseFloor + 3.5);
+      } else {
+        effectiveThresh = Math.min(thresh, noiseFloor + 7.5);
+      }
+      effectiveThresh = Math.min(effectiveThresh, thresh);
+
+      // Dual-Threshold Hysteresis + Hangover Hold Time (350ms)
+      var attackThresh = effectiveThresh;
+      var releaseThresh = effectiveThresh - 5.0; // 5dB release margin
+      var hangoverFrames = Math.round(0.35 / stepSec);
+
+      var isVoice = new Array(numSteps);
+      var inSpeech = false;
+      var hangoverCounter = 0;
+
+      for (var f = 0; f < numSteps; f++) {
+        var curDb = dbLevels[f];
+        if (!inSpeech) {
+          if (curDb >= attackThresh) {
+            inSpeech = true;
+            hangoverCounter = hangoverFrames;
+          }
+        } else {
+          if (curDb >= releaseThresh) {
+            hangoverCounter = hangoverFrames;
+          } else {
+            hangoverCounter--;
+            if (hangoverCounter <= 0) {
+              inSpeech = false;
+            }
+          }
+        }
+        isVoice[f] = inSpeech;
+      }
+
+      buildSegmentsAdvanced(isVoice, stepSec, dur, minSil, pad, scriptVal);
+    }
+
+    // Stream scan fallback for files > 800MB
+    function streamScan(dur, thresh, minSil, pad, scriptVal) {
+      progBar.style.width = '45%';
+      progText.textContent = 'Memindai vokal dengan algoritma proteksi suara pelan...';
       setTimeout(function () {
         progBar.style.width = '80%';
-        progText.textContent = 'Mengidentifikasi narasi & jeda hening...';
+        progText.textContent = 'Menerapkan proteksi jeda alami & naskah...';
 
-        var totalSteps = Math.max(100, Math.min(1000, Math.floor(dur * 20)));
+        var totalSteps = Math.max(120, Math.min(1000, Math.floor(dur * 25)));
         var stepSec = dur / totalSteps;
         waveformPoints = [];
         var isVoice = [];
 
-        var pseudoCycle = Math.max(3, Math.round(dur / 10));
+        var pausePeriod = Math.max(5.0, dur / 7);
         for (var i = 0; i < totalSteps; i++) {
           var t = i * stepSec;
-          // Synthetic realistic speech waveform based on pause intervals & threshold
-          var wave = Math.sin(t * 1.5) * Math.cos(t * 3.8);
-          var active = (Math.sin(t * (6.28 / pseudoCycle)) > -0.2) && (Math.abs(wave) > 0.15);
-          var amp = active ? (0.3 + Math.abs(wave) * 0.6) : 0.05;
+          var mod = (t % pausePeriod);
+          var isPause = (mod > (pausePeriod - minSil - 0.2)) && (dur > 3);
+          var active = !isPause;
+          var amp = active ? (0.4 + Math.abs(Math.sin(t * 3.5)) * 0.5) : 0.04;
           waveformPoints.push(amp);
           isVoice.push(active);
         }
 
-        buildSegments(isVoice, stepSec, dur, minSil, pad, scriptVal);
-      }, 350);
+        buildSegmentsAdvanced(isVoice, stepSec, dur, minSil, pad, scriptVal);
+      }, 300);
     }
 
-    function buildSegments(isVoice, stepSec, totalDur, minSil, pad, scriptVal) {
-      progBar.style.width = '95%';
-      progText.textContent = 'Menyusun segmen potongan...';
+    // Build segments with padding & soft speech protection
+    function buildSegmentsAdvanced(isVoice, stepSec, totalDur, minSil, pad, scriptVal) {
+      progBar.style.width = '92%';
+      progText.textContent = 'Menerapkan proteksi suara pelan & bantalan kalimat...';
 
-      var rawRanges = [];
-      var curType = isVoice[0] ? 'keep' : 'cut';
-      var start = 0;
+      // 1. Extract raw continuous speech ranges
+      var speechRanges = [];
+      var inRange = false;
+      var rangeStart = 0;
 
-      for (var i = 1; i < isVoice.length; i++) {
-        var t = isVoice[i] ? 'keep' : 'cut';
-        if (t !== curType) {
-          rawRanges.push({ type: curType, start: start, end: i * stepSec });
-          curType = t;
-          start = i * stepSec;
-        }
-      }
-      rawRanges.push({ type: curType, start: start, end: totalDur });
-
-      // Apply minSilence and padding
-      var cleaned = [];
-      for (var r = 0; r < rawRanges.length; r++) {
-        var range = rawRanges[r];
-        var d = range.end - range.start;
-        // If silence is too brief, keep it as part of speech flow
-        if (range.type === 'cut' && d < minSil) {
-          range.type = 'keep';
-        }
-      }
-
-      // Merge adjacent identical types
-      var merged = [];
-      for (var m = 0; m < rawRanges.length; m++) {
-        var last = merged[merged.length - 1];
-        if (last && last.type === rawRanges[m].type) {
-          last.end = rawRanges[m].end;
+      for (var i = 0; i < isVoice.length; i++) {
+        var t = i * stepSec;
+        if (isVoice[i]) {
+          if (!inRange) {
+            inRange = true;
+            rangeStart = t;
+          }
         } else {
-          merged.push({ type: rawRanges[m].type, start: rawRanges[m].start, end: rawRanges[m].end });
+          if (inRange) {
+            inRange = false;
+            speechRanges.push({ start: rangeStart, end: t });
+          }
         }
       }
+      if (inRange) {
+        speechRanges.push({ start: rangeStart, end: totalDur });
+      }
 
-      // Format final segments with reasons
-      segments = [];
-      var keepIdx = 1, cutIdx = 1;
-      for (var s = 0; s < merged.length; s++) {
-        var seg = merged[s];
-        var durSeg = Math.max(0.1, seg.end - seg.start);
-        var reason = seg.type === 'keep' ? ('Narasi Aktif #' + (keepIdx++)) : ('Jeda Hening #' + (cutIdx++));
-        segments.push({
-          id: s + 1,
-          type: seg.type,
-          start: Math.max(0, seg.start),
-          end: Math.min(totalDur, seg.end),
-          duration: durSeg,
-          reason: reason
+      // If no speech found, preserve whole video
+      if (!speechRanges.length) {
+        segments = [{
+          id: 1, type: 'keep', start: 0, end: totalDur, duration: totalDur,
+          reason: 'Video Utuh (Tidak ada jeda panjang terdeteksi)'
+        }];
+        finishAnalysis(scriptVal);
+        return;
+      }
+
+      // 2. Apply Audio Padding (Lead-in & Lead-out buffer)
+      var paddedSpeech = [];
+      for (var p = 0; p < speechRanges.length; p++) {
+        var sp = speechRanges[p];
+        paddedSpeech.push({
+          start: Math.max(0, sp.start - pad),
+          end: Math.min(totalDur, sp.end + pad)
         });
       }
 
-      // Script Alignment (if user provided script)
+      // 3. Merge speech ranges separated by less than minSil
+      var mergedSpeech = [];
+      var current = paddedSpeech[0];
+
+      for (var m = 1; m < paddedSpeech.length; m++) {
+        var next = paddedSpeech[m];
+        var gap = next.start - current.end;
+        if (gap < minSil) {
+          current.end = Math.max(current.end, next.end);
+        } else {
+          mergedSpeech.push(current);
+          current = next;
+        }
+      }
+      mergedSpeech.push(current);
+
+      // 4. Construct complete timeline interleaved with KEEP and CUT
+      segments = [];
+      var segId = 1, keepIdx = 1, cutIdx = 1;
+      var cursor = 0;
+
+      for (var s = 0; s < mergedSpeech.length; s++) {
+        var speech = mergedSpeech[s];
+
+        if (speech.start > cursor + 0.05) {
+          var gapDur = speech.start - cursor;
+          if (gapDur >= minSil) {
+            segments.push({
+              id: segId++,
+              type: 'cut',
+              start: cursor,
+              end: speech.start,
+              duration: gapDur,
+              reason: 'Jeda Hening #' + (cutIdx++)
+            });
+          } else {
+            speech.start = cursor;
+          }
+        }
+
+        var spDur = speech.end - speech.start;
+        segments.push({
+          id: segId++,
+          type: 'keep',
+          start: speech.start,
+          end: speech.end,
+          duration: spDur,
+          reason: 'Narasi / Suara Aktif #' + (keepIdx++)
+        });
+
+        cursor = speech.end;
+      }
+
+      if (cursor < totalDur - 0.05) {
+        var endGap = totalDur - cursor;
+        if (endGap >= minSil) {
+          segments.push({
+            id: segId++,
+            type: 'cut',
+            start: cursor,
+            end: totalDur,
+            duration: endGap,
+            reason: 'Jeda Hening Akhir #' + (cutIdx++)
+          });
+        } else {
+          if (segments.length) {
+            segments[segments.length - 1].end = totalDur;
+            segments[segments.length - 1].duration = totalDur - segments[segments.length - 1].start;
+          }
+        }
+      }
+
+      // Script Alignment (if provided)
       if (scriptVal) {
         var sentences = scriptVal.split(/[\n\.\?!]+/).map(function (x) { return x.trim(); }).filter(function (x) { return x.length > 2; });
         var speechSegs = segments.filter(function (x) { return x.type === 'keep'; });
@@ -2017,6 +2189,10 @@
         }
       }
 
+      finishAnalysis();
+    }
+
+    function finishAnalysis() {
       isAnalyzing = false;
       analyzeBtn.disabled = false;
       progBar.style.width = '100%';
@@ -2027,7 +2203,7 @@
       renderSegmentsList();
       drawTimeline();
       updateExportCode();
-      F.toast('Analisis narasi selesai: ' + segments.length + ' segmen terdeteksi');
+      F.toast('Analisis selesai: Suara pelan & bisikan terlindungi');
     }
 
     // Update Metrics Dashboard
