@@ -1,5 +1,5 @@
 /* ===== Ardan Tools — Service Worker (PWA & Offline Processing 100%) ===== */
-const CACHE_NAME = 'ardan-cache-v3';
+const CACHE_NAME = 'ardan-cache-v4';
 const PRECACHE_URLS = [
   '/',
   '/index.html',

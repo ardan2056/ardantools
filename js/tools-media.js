@@ -3136,4 +3136,658 @@
       if (outUrl) try { URL.revokeObjectURL(outUrl); } catch (_) {}
     });
   };
+
+  /* ---------------- PDF to Word Converter (PDF ke DOCX) ---------------- */
+  IMPL['pdf-to-word'] = IMPL['pdf-ke-word'] = IMPL['pdf-to-docx'] = IMPL['pdf-ke-docx'] = function (root, t) {
+    var file = null, pdfDoc = null, totalPages = 0;
+    var layoutMode = 'flow'; // 'flow' (Paragraf Rapi & Heading) or 'lines' (Presisi Baris)
+    var rangeMode = 'all'; // 'all' or 'custom'
+    var rangeStr = '';
+    var detectHeadings = true;
+    var keepPageBreaks = true;
+    var busy = false;
+    var docxBlob = null;
+    var stats = null;
+    var extractedPages = [];
+    var fullPlainText = '';
+
+    root.innerHTML =
+      '<div class="toolbar" style="gap:16px;margin-bottom:18px;flex-wrap:wrap;align-items:flex-end" id="pwToolbar">' +
+        '<div class="field">' +
+          '<label class="label">Mode Tata Letak</label>' +
+          '<div class="seg" id="pwMode">' +
+            '<button class="active" data-m="flow" title="Menggabungkan baris terpotong menjadi paragraf natural dan mendeteksi judul">Paragraf Rapi &amp; Heading</button>' +
+            '<button data-m="lines" title="Mempertahankan setiap baris persis seperti susunan PDF asli">Presisi Baris</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="field">' +
+          '<label class="label">Pilihan Halaman</label>' +
+          '<div class="seg" id="pwRange">' +
+            '<button class="active" data-r="all">Semua Halaman</button>' +
+            '<button data-r="custom">Pilih Rentang</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="field" id="pwRangeField" style="display:none">' +
+          '<label class="label">Rentang Halaman</label>' +
+          '<input type="text" class="input" id="pwRangeVal" placeholder="Contoh: 1-5, 8, 10" style="width:140px;height:38px">' +
+        '</div>' +
+        '<div class="field" style="margin-left:auto;display:flex;align-items:center;gap:14px;padding-bottom:6px;flex-wrap:wrap">' +
+          '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="pwHeadings" checked> Deteksi Judul (Heading)</label>' +
+          '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="pwBreaks" checked> Pemisah Halaman (Page Break)</label>' +
+        '</div>' +
+      '</div>' +
+      '<div id="pwDrop"></div>' +
+      '<div id="pwBody"></div>';
+
+    var drop = F.dropzone({
+      accept: t.accept || 'application/pdf,.pdf',
+      maxMB: t.maxMB,
+      maxFiles: 1,
+      title: t.dropTitle || 'Tarik & lepas file PDF di sini untuk diubah ke Word (.docx)',
+      sub: t.dropSub || '100% In-Browser · Tanpa Batas Ukuran (Unlimited MB) · Format .docx Dapat Diedit Penuh',
+      test: function (f) { return /pdf/i.test(f.type) || /\.pdf$/i.test(f.name); },
+      onFiles: function (fs) {
+        if (!fs || !fs.length) return;
+        loadFile(fs[0]);
+      }
+    });
+    F.$('#pwDrop', root).appendChild(drop);
+
+    function cleanXml(s) {
+      return String(s || '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+    }
+
+    function escXml(s) {
+      return cleanXml(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    }
+
+    function parseRanges(str, total) {
+      if (!str || !str.trim() || str.trim().toLowerCase() === 'all') {
+        var arr = [];
+        for (var i = 1; i <= total; i++) arr.push(i);
+        return arr;
+      }
+      var set = {};
+      str.split(',').forEach(function (part) {
+        part = part.trim();
+        if (!part) return;
+        if (part.indexOf('-') >= 0) {
+          var p = part.split('-');
+          var s = parseInt(p[0], 10) || 1;
+          var e = parseInt(p[1], 10) || total;
+          s = Math.max(1, Math.min(s, total));
+          e = Math.max(1, Math.min(e, total));
+          for (var k = Math.min(s, e); k <= Math.max(s, e); k++) set[k] = true;
+        } else {
+          var n = parseInt(part, 10);
+          if (n >= 1 && n <= total) set[n] = true;
+        }
+      });
+      var res = Object.keys(set).map(Number).sort(function (a, b) { return a - b; });
+      return res.length ? res : [1];
+    }
+
+    function progress(msg, frac) {
+      var body = F.$('#pwBody', root);
+      if (!body) return;
+      var pct = Math.min(100, Math.max(0, Math.round((frac || 0) * 100)));
+      var el = F.$('#pwProgWrap', body);
+      if (!el) {
+        render();
+        el = F.$('#pwProgWrap', body);
+      }
+      if (el) {
+        el.innerHTML =
+          '<div style="margin-top:16px;background:var(--bg-alt, rgba(0,0,0,0.03));padding:16px;border-radius:12px;border:1px solid var(--border)">' +
+            '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:8px">' +
+              '<span>' + esc(msg) + '</span>' +
+              '<span>' + pct + '%</span>' +
+            '</div>' +
+            '<div class="progress" style="height:8px;border-radius:4px;overflow:hidden;background:var(--border)"><span style="display:block;height:100%;background:linear-gradient(90deg, #6366f1, #3b82f6);width:' + pct + '%;transition:width 0.2s"></span></div>' +
+          '</div>';
+      }
+    }
+
+    function render() {
+      var body = F.$('#pwBody', root);
+      if (!body) return;
+      if (!file) {
+        body.innerHTML = '';
+        drop.style.display = '';
+        return;
+      }
+      drop.style.display = 'none';
+
+      var meta = '<span>' + F.formatBytes(file.size) + '</span> · <span>' + (totalPages ? totalPages + ' Halaman PDF' : 'Memuat…') + '</span>';
+      var actions = '<button class="icon-btn danger" data-act="reset" title="Hapus PDF">' + icon('x', 'icon-sm') + '</button>';
+
+      var statsHtml = '';
+      if (stats && docxBlob) {
+        statsHtml =
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:12px;margin:16px 0">' +
+            '<div style="background:var(--bg-alt, rgba(0,0,0,0.02));padding:12px;border-radius:10px;border:1px solid var(--border);text-align:center">' +
+              '<div style="font-size:11px;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px">Halaman</div>' +
+              '<div style="font-size:20px;font-weight:700;color:var(--primary, #6366f1);margin-top:2px">' + stats.pages + '</div>' +
+            '</div>' +
+            '<div style="background:var(--bg-alt, rgba(0,0,0,0.02));padding:12px;border-radius:10px;border:1px solid var(--border);text-align:center">' +
+              '<div style="font-size:11px;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px">Paragraf</div>' +
+              '<div style="font-size:20px;font-weight:700;color:var(--text);margin-top:2px">' + stats.paragraphs + '</div>' +
+            '</div>' +
+            '<div style="background:var(--bg-alt, rgba(0,0,0,0.02));padding:12px;border-radius:10px;border:1px solid var(--border);text-align:center">' +
+              '<div style="font-size:11px;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px">Total Kata</div>' +
+              '<div style="font-size:20px;font-weight:700;color:var(--text);margin-top:2px">' + stats.words.toLocaleString() + '</div>' +
+            '</div>' +
+            '<div style="background:var(--bg-alt, rgba(0,0,0,0.02));padding:12px;border-radius:10px;border:1px solid var(--border);text-align:center">' +
+              '<div style="font-size:11px;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px">Ukuran DOCX</div>' +
+              '<div style="font-size:20px;font-weight:700;color:#10b981;margin-top:2px">' + F.formatBytes(docxBlob.size) + '</div>' +
+            '</div>' +
+          '</div>';
+      }
+
+      var warnHtml = '';
+      if (stats && stats.isScannedWarning) {
+        warnHtml =
+          '<div style="background:rgba(245, 158, 11, 0.1);border:1px solid rgba(245, 158, 11, 0.3);color:var(--text);padding:14px 16px;border-radius:10px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px;font-size:13px;line-height:1.5">' +
+            '<div style="color:#d97706;font-size:18px;line-height:1">' + icon('shield', 'icon-sm') + '</div>' +
+            '<div><strong>Perhatian:</strong> Dokumen PDF ini tampaknya merupakan hasil pemindaian (scan gambar) tanpa lapisan teks digital (OCR). Dokumen Word tetap dibentuk, namun teks mungkin minim atau kosong. Pastikan PDF memiliki teks yang dapat disorot (selectable text) untuk hasil maksimal.</div>' +
+          '</div>';
+      }
+
+      var previewHtml = '';
+      if (docxBlob && fullPlainText) {
+        var previewSnippet = fullPlainText.length > 3000 ? fullPlainText.slice(0, 3000) + '\n\n... [Sisa teks dokumen tersimpan lengkap di dalam file Word DOCX] ...' : fullPlainText;
+        previewHtml =
+          '<div style="margin-top:20px">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+              '<span class="label" style="font-size:13px;font-weight:600">Pratinjau Isi Dokumen</span>' +
+              '<button class="btn btn-sm" data-act="copy" style="font-size:12px;padding:4px 10px">' + icon('copy', 'icon-xs') + ' Salin Semua Teks</button>' +
+            '</div>' +
+            '<div style="background:var(--card-bg, #fff);border:1px solid var(--border);border-radius:10px;padding:16px;max-height:280px;overflow-y:auto;white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.6;color:var(--text);box-shadow:inset 0 1px 3px rgba(0,0,0,0.05)">' + esc(previewSnippet) + '</div>' +
+          '</div>';
+      }
+
+      var footHtml = '';
+      if (docxBlob) {
+        footHtml =
+          '<div class="list-footer" style="margin-top:20px">' +
+            '<span class="summary"><span style="color:#10b981;font-weight:600">✓ Dokumen Word (.docx) Siap</span> · Siap diedit di Word / Docs</span>' +
+            '<div class="toolbar">' +
+              '<button class="btn" data-act="reset">' + icon('upload') + 'Pilih PDF Lain</button>' +
+              '<button class="btn" data-act="reprocess">' + icon('refresh') + 'Konversi Ulang</button>' +
+              '<button class="btn btn-primary btn-lg" data-act="dl">' + icon('download') + 'Unduh Dokumen Word (.docx)</button>' +
+            '</div>' +
+          '</div>';
+      }
+
+      body.innerHTML =
+        fileRow(file.name, meta, actions, 'file') +
+        '<div id="pwProgWrap"></div>' +
+        warnHtml +
+        statsHtml +
+        footHtml +
+        previewHtml;
+    }
+
+    async function loadFile(f) {
+      file = f;
+      pdfDoc = null;
+      totalPages = 0;
+      docxBlob = null;
+      stats = null;
+      extractedPages = [];
+      fullPlainText = '';
+      busy = true;
+
+      render();
+      progress('Membaca file PDF…', 0.05);
+
+      try {
+        var pdfjs = await F.LIB.pdfjs();
+        var buf = await F.readArrayBuffer(f);
+        progress('Memeriksa struktur PDF…', 0.15);
+        pdfDoc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
+        totalPages = pdfDoc.numPages;
+        render();
+        await runConversion();
+      } catch (err) {
+        busy = false;
+        render();
+        var msg = err && err.message ? err.message : String(err);
+        if (/password/i.test(msg)) {
+          F.toast('File PDF diproteksi kata sandi. Silakan gunakan PDF yang tidak terkunci.', 'error');
+        } else {
+          F.toast('Gagal memproses file PDF: ' + msg, 'error');
+        }
+      }
+    }
+
+    async function runConversion() {
+      if (!pdfDoc) return;
+      busy = true;
+      docxBlob = null;
+      stats = null;
+      extractedPages = [];
+      fullPlainText = '';
+
+      var targetPageNums = (rangeMode === 'custom' && rangeStr.trim())
+        ? parseRanges(rangeStr, totalPages)
+        : (function () { var a = []; for (var i = 1; i <= totalPages; i++) a.push(i); return a; })();
+
+      var pagesData = [];
+      var totalWords = 0;
+      var totalChars = 0;
+      var totalParas = 0;
+      var allLinesAcrossDoc = [];
+
+      // Extract each page
+      for (var idx = 0; idx < targetPageNums.length; idx++) {
+        var pNum = targetPageNums[idx];
+        var pct = 0.2 + (idx / targetPageNums.length) * 0.6;
+        progress('Mengekstrak teks halaman ' + pNum + ' dari ' + totalPages + ' (' + (idx + 1) + '/' + targetPageNums.length + ')…', pct);
+        await new Promise(function (r) { setTimeout(r, 0); });
+
+        var page = await pdfDoc.getPage(pNum);
+        var vp = page.getViewport({ scale: 1.5 });
+        var tc = await page.getTextContent({ normalizeWhitespace: true });
+
+        // Map and clean text items
+        var rawItems = (tc.items || []).map(function (it) {
+          var pt = vp.convertToViewportPoint(it.transform[4], it.transform[5]);
+          var scaleH = Math.abs(it.transform[3]) * vp.scale;
+          if (!scaleH || scaleH < 6) scaleH = Math.hypot(it.transform[0], it.transform[1]) * vp.scale;
+          if (!scaleH || scaleH < 6) scaleH = (it.height || 12) * vp.scale;
+          var isBold = /bold|black|heavy|medi/i.test(it.fontName || '');
+          return {
+            str: it.str || '',
+            x: pt[0],
+            y: pt[1],
+            w: (it.width || 0) * vp.scale,
+            fs: Math.round(scaleH),
+            isBold: isBold
+          };
+        }).filter(function (it) { return it.str && it.str.trim().length > 0; });
+
+        // Sort items by Y desc, then X asc
+        rawItems.sort(function (a, b) {
+          if (Math.abs(a.y - b.y) > 4) return a.y - b.y;
+          return a.x - b.x;
+        });
+
+        // Group into lines
+        var lines = [];
+        var curLine = null;
+        rawItems.forEach(function (it) {
+          if (!curLine || Math.abs(it.y - curLine.y) > (it.fs * 0.45 || 4)) {
+            curLine = { y: it.y, fs: it.fs, isBold: it.isBold, items: [it] };
+            lines.push(curLine);
+          } else {
+            curLine.items.push(it);
+            if (it.fs > curLine.fs) curLine.fs = it.fs;
+            if (it.isBold) curLine.isBold = true;
+          }
+        });
+
+        var pageLines = lines.map(function (ln) {
+          var lineText = '';
+          var lastX = -1;
+          ln.items.forEach(function (it) {
+            if (lastX >= 0 && (it.x - lastX) > (it.fs * 0.28)) {
+              lineText += ' ';
+            }
+            lineText += it.str;
+            lastX = it.x + (it.w || (it.str.length * it.fs * 0.5));
+          });
+          return {
+            text: lineText.trim(),
+            fs: ln.fs,
+            isBold: ln.isBold,
+            y: ln.y
+          };
+        }).filter(function (l) { return l.text.length > 0; });
+
+        pagesData.push({ page: pNum, lines: pageLines });
+        pageLines.forEach(function (l) { allLinesAcrossDoc.push(l); });
+        try { page.cleanup(); } catch (_) {}
+      }
+
+      progress('Menganalisis tata letak & struktur paragraf…', 0.82);
+      await new Promise(function (r) { setTimeout(r, 0); });
+
+      // Determine median font size across the document
+      var allFs = allLinesAcrossDoc.map(function (l) { return l.fs || 12; }).sort(function (a, b) { return a - b; });
+      var medianFs = allFs.length ? allFs[Math.floor(allFs.length / 2)] : 12;
+
+      // Group lines to paragraphs per page
+      var docPages = [];
+      var fullTextParts = [];
+
+      pagesData.forEach(function (pd) {
+        var paragraphs = [];
+        if (layoutMode === 'lines') {
+          // Exact line by line
+          pd.lines.forEach(function (ln) {
+            paragraphs.push({ text: ln.text, style: null, isBold: ln.isBold });
+          });
+        } else {
+          // Flow mode: join continuous lines into coherent paragraphs & headings
+          var curPara = null;
+          function flush() {
+            if (curPara && curPara.text.trim()) {
+              paragraphs.push(curPara);
+            }
+            curPara = null;
+          }
+
+          pd.lines.forEach(function (ln, lIdx) {
+            var text = ln.text.trim();
+            if (!text) return;
+
+            // Heading check
+            if (detectHeadings) {
+              if (ln.fs >= medianFs * 1.38) {
+                flush();
+                paragraphs.push({ text: text, style: 'Heading1', isBold: true });
+                return;
+              }
+              if (ln.fs >= medianFs * 1.18 || (ln.isBold && text.length <= 80 && !/[.,;:?!]$/.test(text))) {
+                flush();
+                paragraphs.push({ text: text, style: 'Heading2', isBold: true });
+                return;
+              }
+            }
+
+            // Bullet list check
+            var isList = /^([•\-*]|\d+[\.\)]|[a-zA-Z][\.\)])\s+/.test(text);
+            if (isList) {
+              flush();
+              paragraphs.push({ text: text, style: null, isList: true });
+              return;
+            }
+
+            // Paragraph continuation
+            if (!curPara) {
+              curPara = { text: text, style: null, fs: ln.fs, isBold: ln.isBold, lastY: ln.y };
+            } else {
+              var prevText = curPara.text.trim();
+              var endsTerminal = /[.?!:]$/.test(prevText);
+              var prevLine = pd.lines[lIdx - 1];
+              var largeGap = prevLine && (ln.y - prevLine.y) > (1.8 * (prevLine.fs || 12));
+
+              if (endsTerminal || largeGap) {
+                flush();
+                curPara = { text: text, style: null, fs: ln.fs, isBold: ln.isBold, lastY: ln.y };
+              } else {
+                curPara.text += ' ' + text;
+                curPara.lastY = ln.y;
+              }
+            }
+          });
+          flush();
+        }
+
+        docPages.push({ page: pd.page, paragraphs: paragraphs });
+
+        // Accumulate statistics
+        var pageText = paragraphs.map(function (p) { return p.text; }).join('\n\n');
+        fullTextParts.push('--- [ Halaman ' + pd.page + ' ] ---\n' + pageText);
+        paragraphs.forEach(function (p) {
+          totalParas++;
+          totalChars += p.text.length;
+          var w = p.text.trim().split(/\s+/).filter(Boolean);
+          totalWords += w.length;
+        });
+      });
+
+      fullPlainText = fullTextParts.join('\n\n');
+
+      progress('Menyusun dokumen OpenXML .docx…', 0.92);
+      await new Promise(function (r) { setTimeout(r, 0); });
+
+      var JSZip = await F.LIB.zip();
+      var zip = new JSZip();
+
+      var contentTypes =
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n' +
+        '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n' +
+        '  <Default Extension="xml" ContentType="application/xml"/>\n' +
+        '  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>\n' +
+        '  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>\n' +
+        '  <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>\n' +
+        '</Types>';
+
+      var pkgRels =
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+        '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>\n' +
+        '</Relationships>';
+
+      var docRels =
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+        '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>\n' +
+        '  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>\n' +
+        '</Relationships>';
+
+      var settingsXml =
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">\n' +
+        '  <w:defaultTabStop w:val="720"/>\n' +
+        '  <w:characterSpacingControl w:val="doNotCompress"/>\n' +
+        '</w:settings>';
+
+      var stylesXml =
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">\n' +
+        '  <w:docDefaults>\n' +
+        '    <w:rPrDefault>\n' +
+        '      <w:rPr>\n' +
+        '        <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>\n' +
+        '        <w:sz w:val="22"/>\n' +
+        '        <w:szCs w:val="22"/>\n' +
+        '        <w:lang w:val="id-ID"/>\n' +
+        '      </w:rPr>\n' +
+        '    </w:rPrDefault>\n' +
+        '    <w:pPrDefault>\n' +
+        '      <w:pPr>\n' +
+        '        <w:spacing w:after="140" w:line="276" w:lineRule="auto"/>\n' +
+        '      </w:pPr>\n' +
+        '    </w:pPrDefault>\n' +
+        '  </w:docDefaults>\n' +
+        '  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">\n' +
+        '    <w:name w:val="Normal"/>\n' +
+        '    <w:qFormat/>\n' +
+        '  </w:style>\n' +
+        '  <w:style w:type="paragraph" w:styleId="Heading1">\n' +
+        '    <w:name w:val="heading 1"/>\n' +
+        '    <w:basedOn w:val="Normal"/>\n' +
+        '    <w:next w:val="Normal"/>\n' +
+        '    <w:qFormat/>\n' +
+        '    <w:pPr>\n' +
+        '      <w:keepNext/>\n' +
+        '      <w:spacing w:before="280" w:after="120"/>\n' +
+        '    </w:pPr>\n' +
+        '    <w:rPr>\n' +
+        '      <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>\n' +
+        '      <w:b/>\n' +
+        '      <w:bCs/>\n' +
+        '      <w:color w:val="1E3A8A"/>\n' +
+        '      <w:sz w:val="34"/>\n' +
+        '      <w:szCs w:val="34"/>\n' +
+        '    </w:rPr>\n' +
+        '  </w:style>\n' +
+        '  <w:style w:type="paragraph" w:styleId="Heading2">\n' +
+        '    <w:name w:val="heading 2"/>\n' +
+        '    <w:basedOn w:val="Normal"/>\n' +
+        '    <w:next w:val="Normal"/>\n' +
+        '    <w:qFormat/>\n' +
+        '    <w:pPr>\n' +
+        '      <w:keepNext/>\n' +
+        '      <w:spacing w:before="200" w:after="80"/>\n' +
+        '    </w:pPr>\n' +
+        '    <w:rPr>\n' +
+        '      <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>\n' +
+        '      <w:b/>\n' +
+        '      <w:bCs/>\n' +
+        '      <w:color w:val="2563EB"/>\n' +
+        '      <w:sz w:val="28"/>\n' +
+        '      <w:szCs w:val="28"/>\n' +
+        '    </w:rPr>\n' +
+        '  </w:style>\n' +
+        '  <w:style w:type="paragraph" w:styleId="ListParagraph">\n' +
+        '    <w:name w:val="List Paragraph"/>\n' +
+        '    <w:basedOn w:val="Normal"/>\n' +
+        '    <w:qFormat/>\n' +
+        '    <w:pPr>\n' +
+        '      <w:ind w:left="480"/>\n' +
+        '      <w:spacing w:after="80"/>\n' +
+        '    </w:pPr>\n' +
+        '  </w:style>\n' +
+        '</w:styles>';
+
+      var bodyXml = '';
+      docPages.forEach(function (pg, pIdx) {
+        if (pIdx > 0 && keepPageBreaks) {
+          bodyXml += '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+        }
+
+        pg.paragraphs.forEach(function (p) {
+          var pPr = '';
+          if (p.style) {
+            pPr += '<w:pStyle w:val="' + escXml(p.style) + '"/>';
+          } else if (p.isList) {
+            pPr += '<w:pStyle w:val="ListParagraph"/>';
+          }
+          if (pPr) pPr = '<w:pPr>' + pPr + '</w:pPr>';
+
+          var rPr = '';
+          if (p.isBold) rPr += '<w:b/><w:bCs/>';
+          if (rPr) rPr = '<w:rPr>' + rPr + '</w:rPr>';
+
+          bodyXml += '<w:p>' + pPr + '<w:r>' + rPr + '<w:t xml:space="preserve">' + escXml(p.text) + '</w:t></w:r></w:p>';
+        });
+      });
+
+      // Default section properties for standard A4 document with 1 inch margin
+      bodyXml +=
+        '<w:sectPr>' +
+          '<w:pgSz w:w="11906" w:h="16838"/>' +
+          '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>' +
+        '</w:sectPr>';
+
+      var documentXml =
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"\n' +
+        '            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">\n' +
+        '  <w:body>' + bodyXml + '</w:body>\n' +
+        '</w:document>';
+
+      zip.file('[Content_Types].xml', contentTypes);
+      zip.file('_rels/.rels', pkgRels);
+      zip.file('word/_rels/document.xml.rels', docRels);
+      zip.file('word/settings.xml', settingsXml);
+      zip.file('word/styles.xml', stylesXml);
+      zip.file('word/document.xml', documentXml);
+
+      progress('Menyelesaikan file .docx…', 0.98);
+      docxBlob = await zip.generateAsync({
+        type: 'blob',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      });
+
+      stats = {
+        pages: targetPageNums.length,
+        paragraphs: totalParas,
+        words: totalWords,
+        chars: totalChars,
+        isScannedWarning: totalChars < 30
+      };
+
+      busy = false;
+      render();
+      F.toast('Dokumen Word (.docx) berhasil dibuat!', 'success');
+    }
+
+    // Event listeners
+    root.addEventListener('click', function (e) {
+      var btn = e.target.closest('button');
+      if (!btn) return;
+
+      var m = btn.getAttribute('data-m');
+      if (m) {
+        F.$$('#pwMode button', root).forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        layoutMode = m;
+        if (pdfDoc && file) runConversion();
+        return;
+      }
+
+      var r = btn.getAttribute('data-r');
+      if (r) {
+        F.$$('#pwRange button', root).forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        rangeMode = r;
+        var rf = F.$('#pwRangeField', root);
+        if (rf) rf.style.display = r === 'custom' ? '' : 'none';
+        if (pdfDoc && file) runConversion();
+        return;
+      }
+
+      var act = btn.getAttribute('data-act');
+      if (act === 'reset') {
+        file = null;
+        pdfDoc = null;
+        totalPages = 0;
+        docxBlob = null;
+        stats = null;
+        extractedPages = [];
+        fullPlainText = '';
+        render();
+      } else if (act === 'reprocess') {
+        if (pdfDoc && file) runConversion();
+      } else if (act === 'dl') {
+        if (docxBlob && file) {
+          var outName = F.baseName(file.name) + '.docx';
+          F.download(docxBlob, outName);
+        }
+      } else if (act === 'copy') {
+        if (fullPlainText) {
+          F.copyText(fullPlainText).then(function () {
+            F.toast('Semua teks dokumen berhasil disalin ke clipboard!', 'success');
+          }).catch(function () {
+            F.toast('Gagal menyalin teks.', 'error');
+          });
+        }
+      }
+    });
+
+    var rangeInput = F.$('#pwRangeVal', root);
+    if (rangeInput) {
+      rangeInput.addEventListener('change', function () {
+        rangeStr = rangeInput.value;
+        if (pdfDoc && file) runConversion();
+      });
+    }
+
+    var headCheck = F.$('#pwHeadings', root);
+    if (headCheck) {
+      headCheck.addEventListener('change', function () {
+        detectHeadings = !!headCheck.checked;
+        if (pdfDoc && file) runConversion();
+      });
+    }
+
+    var breakCheck = F.$('#pwBreaks', root);
+    if (breakCheck) {
+      breakCheck.addEventListener('change', function () {
+        keepPageBreaks = !!breakCheck.checked;
+        if (pdfDoc && file) runConversion();
+      });
+    }
+  };
 })();
