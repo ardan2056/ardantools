@@ -677,6 +677,329 @@
     });
   };
 
+  /* ---------------- JPG to PDF (Foto ke PDF) ---------------- */
+  IMPL['jpg-to-pdf'] = IMPL['foto-ke-pdf'] = IMPL['image-to-pdf'] = function (root, t) {
+    var items = [], seq = 0, result = null, busy = false, dragSrcId = null;
+    var pageSize = 'fit'; // 'fit', 'a4', 'letter', 'legal'
+    var orientation = 'auto'; // 'auto', 'portrait', 'landscape'
+    var margin = 0; // 0, 14, 28
+    var quality = 0.92; // 0.92, 0.80, 1.0
+
+    root.innerHTML =
+      '<div class="toolbar" style="gap:16px;margin-bottom:18px;flex-wrap:wrap;align-items:flex-end" id="jpOpts">' +
+        '<div class="field">' +
+          '<label class="label">Ukuran Halaman</label>' +
+          '<div class="seg" id="jpSize">' +
+            '<button data-val="fit" class="active" title="Sesuai ukuran gambar">Fit Image</button>' +
+            '<button data-val="a4" title="Ukuran standar dokumen A4">A4</button>' +
+            '<button data-val="letter" title="Format Letter">Letter</button>' +
+            '<button data-val="legal" title="Format Legal">Legal</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="field" id="jpOrientField" style="display:none">' +
+          '<label class="label">Orientasi</label>' +
+          '<div class="seg" id="jpOrient">' +
+            '<button data-val="auto" class="active">Auto</button>' +
+            '<button data-val="portrait">Portrait</button>' +
+            '<button data-val="landscape">Landscape</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="field">' +
+          '<label class="label">Margin Halaman</label>' +
+          '<div class="seg" id="jpMargin">' +
+            '<button data-val="0" class="active">Tanpa Margin (0 pt)</button>' +
+            '<button data-val="14">Tipis (14 pt)</button>' +
+            '<button data-val="28">Normal (28 pt)</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="field">' +
+          '<label class="label">Kualitas Kompresi</label>' +
+          '<div class="seg" id="jpQuality">' +
+            '<button data-val="0.92" class="active">Tinggi (92%)</button>' +
+            '<button data-val="0.80">Hemat Ukuran (80%)</button>' +
+            '<button data-val="1.0">Maksimum (100%)</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div id="jpDrop"></div>' +
+      '<div id="jpList" class="file-list"></div>' +
+      '<div id="jpFoot"></div>';
+
+    var drop = F.dropzone({
+      accept: t.accept, maxMB: t.maxMB, maxFiles: t.maxFiles, title: t.dropTitle, sub: t.dropSub,
+      test: function (f) { return /^image\//i.test(f.type) || /\.(jpe?g|png|webp|bmp|gif|tiff?)$/i.test(f.name); },
+      onFiles: function (files) {
+        result = null;
+        files.forEach(function (f) {
+          var it = { id: ++seq, file: f, name: f.name, size: f.size, thumbUrl: null, dim: null, error: null };
+          items.push(it);
+          try {
+            var url = URL.createObjectURL(f);
+            it.thumbUrl = url;
+            var img = new Image();
+            img.onload = function () {
+              it.dim = { width: img.naturalWidth || img.width, height: img.naturalHeight || img.height };
+              draw();
+            };
+            img.onerror = function () {
+              it.error = 'Gagal memuat gambar';
+              draw();
+            };
+            img.src = url;
+          } catch (e) {
+            it.error = 'File tidak dapat dibaca';
+          }
+        });
+        draw();
+      }
+    });
+    F.$('#jpDrop', root).appendChild(drop);
+
+    function updateOrientVisibility() {
+      var ofield = F.$('#jpOrientField', root);
+      if (ofield) ofield.style.display = (pageSize === 'fit') ? 'none' : 'block';
+    }
+
+    function bindSeg(id, callback) {
+      var el = F.$('#' + id, root);
+      if (!el) return;
+      el.addEventListener('click', function (e) {
+        var btn = e.target.closest('button[data-val]');
+        if (!btn) return;
+        Array.from(el.querySelectorAll('button')).forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        callback(btn.getAttribute('data-val'));
+      });
+    }
+
+    bindSeg('jpSize', function (val) { pageSize = val; updateOrientVisibility(); result = null; draw(); });
+    bindSeg('jpOrient', function (val) { orientation = val; result = null; draw(); });
+    bindSeg('jpMargin', function (val) { margin = +val; result = null; draw(); });
+    bindSeg('jpQuality', function (val) { quality = +val; result = null; draw(); });
+
+    function draw() {
+      drop.classList.toggle('compact', items.length > 0);
+      var listEl = F.$('#jpList', root);
+      listEl.innerHTML = items.map(function (it, i) {
+        var meta = '<span>' + F.formatBytes(it.size) + '</span>' +
+          (it.error ? '<span class="badge badge-bad">' + esc(it.error) + '</span>' :
+           it.dim ? '<span class="badge badge-info">' + it.dim.width + ' × ' + it.dim.height + ' px</span>' :
+           '<span class="spinner"></span>');
+        var thumb = it.thumbUrl ? '<img src="' + it.thumbUrl + '" alt="preview">' : icon('fileImage');
+        return '<div class="file-item" draggable="true" data-id="' + it.id + '">' +
+          '<span class="drag-handle" title="Tarik untuk memindahkan urutan">' + icon('grip') + '</span>' +
+          '<span class="badge badge-muted" style="min-width:32px;text-align:center">#' + (i + 1) + '</span>' +
+          '<div class="file-thumb" style="color:var(--c-pdf);background:var(--surface-2)">' + thumb + '</div>' +
+          '<div class="file-info"><div class="file-name">' + esc(it.name) + '</div><div class="file-meta">' + meta + '</div></div>' +
+          '<div class="file-actions">' +
+            '<button class="icon-btn" data-act="up" title="Pindah ke atas"' + (i === 0 ? ' disabled' : '') + '>' + icon('arrowUp', 'icon-sm') + '</button>' +
+            '<button class="icon-btn" data-act="down" title="Pindah ke bawah"' + (i === items.length - 1 ? ' disabled' : '') + '>' + icon('arrowDown', 'icon-sm') + '</button>' +
+            '<button class="icon-btn danger" data-act="rm" title="Hapus foto ini">' + icon('x', 'icon-sm') + '</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      var foot = F.$('#jpFoot', root);
+      if (!items.length) { foot.innerHTML = ''; return; }
+      var valid = items.filter(function (it) { return !it.error && it.dim; }).length;
+
+      var resNotice = '';
+      if (result) {
+        resNotice = '<div class="notice notice-ok" style="margin-bottom:14px">' + icon('checkCircle') +
+          '<span>Dokumen PDF berhasil dibuat! <strong>' + result.pages + ' halaman</strong> (' + F.formatBytes(result.blob.size) + ').</span></div>';
+      }
+
+      foot.innerHTML = resNotice +
+        '<div id="jpErr"></div>' +
+        '<div class="list-footer">' +
+          '<span class="summary">' + items.length + ' foto · ' + valid + ' siap dijadikan PDF</span>' +
+          '<div class="toolbar">' +
+            '<button class="btn btn-danger" data-act="clear">' + icon('trash') + 'Hapus Semua</button>' +
+            '<button class="btn' + (result ? '' : ' btn-primary') + '" data-act="convert"' + (valid > 0 && !busy ? '' : ' disabled') + '>' +
+              (busy ? '<span class="spinner"></span> Mengonversi...' : icon('file') + 'Konversi ke PDF') +
+            '</button>' +
+            (result ? '<button class="btn btn-primary" data-act="dl">' + icon('download') + 'Unduh PDF (' + F.formatBytes(result.blob.size) + ')</button>' : '') +
+            (result ? '<button class="btn" data-act="view" title="Buka PDF di tab baru">' + icon('eye') + 'Buka PDF</button>' : '') +
+          '</div>' +
+        '</div>';
+
+      attachDragEvents();
+    }
+
+    function move(from, to) {
+      if (to < 0 || to >= items.length) return;
+      var it = items.splice(from, 1)[0];
+      items.splice(to, 0, it);
+      result = null;
+      draw();
+    }
+
+    function attachDragEvents() {
+      var rows = root.querySelectorAll('.file-item');
+      rows.forEach(function (row) {
+        row.addEventListener('dragstart', function (e) {
+          dragSrcId = +row.getAttribute('data-id');
+          e.dataTransfer.effectAllowed = 'move';
+          row.style.opacity = '0.5';
+        });
+        row.addEventListener('dragend', function () {
+          row.style.opacity = '1';
+          dragSrcId = null;
+        });
+        row.addEventListener('dragover', function (e) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+        });
+        row.addEventListener('drop', function (e) {
+          e.preventDefault();
+          if (!dragSrcId) return;
+          var targetId = +row.getAttribute('data-id');
+          if (dragSrcId === targetId) return;
+          var fromIdx = items.findIndex(function (x) { return x.id === dragSrcId; });
+          var toIdx = items.findIndex(function (x) { return x.id === targetId; });
+          if (fromIdx !== -1 && toIdx !== -1) {
+            move(fromIdx, toIdx);
+          }
+        });
+      });
+    }
+
+    function itemToJpgBytes(it, q) {
+      return new Promise(function (resolve, reject) {
+        var img = new Image();
+        var url = it.thumbUrl || URL.createObjectURL(it.file);
+        img.onload = function () {
+          var w = img.naturalWidth || img.width;
+          var h = img.naturalHeight || img.height;
+          var c = document.createElement('canvas');
+          c.width = w;
+          c.height = h;
+          var ctx = c.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0);
+          c.toBlob(function (blob) {
+            if (!blob) return reject(new Error('Gagal merender ' + it.name));
+            F.readArrayBuffer(blob).then(function (buf) {
+              resolve({ bytes: new Uint8Array(buf), width: w, height: h });
+            }).catch(reject);
+          }, 'image/jpeg', q || 0.92);
+        };
+        img.onerror = function () {
+          reject(new Error('Gagal membaca gambar ' + it.name));
+        };
+        img.src = url;
+      });
+    }
+
+    root.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-act]');
+      if (!b || busy) return;
+      var a = b.getAttribute('data-act');
+      var row = b.closest('.file-item');
+      var idx = row ? items.findIndex(function (x) { return x.id === +row.getAttribute('data-id'); }) : -1;
+
+      if (a === 'up') move(idx, idx - 1);
+      else if (a === 'down') move(idx, idx + 1);
+      else if (a === 'rm') {
+        if (items[idx] && items[idx].thumbUrl) {
+          try { URL.revokeObjectURL(items[idx].thumbUrl); } catch (_) {}
+        }
+        items.splice(idx, 1);
+        result = null;
+        draw();
+      }
+      else if (a === 'clear') {
+        items.forEach(function (it) { if (it.thumbUrl) try { URL.revokeObjectURL(it.thumbUrl); } catch (_) {} });
+        items = [];
+        result = null;
+        draw();
+      }
+      else if (a === 'dl' && result) {
+        var base = (items[0] && items[0].name) ? F.baseName(items[0].name) + '-converted' : 'images';
+        F.download(result.blob, base + '.pdf');
+      }
+      else if (a === 'view' && result) {
+        window.open(result.url, '_blank');
+      }
+      else if (a === 'convert') {
+        var validItems = items.filter(function (it) { return !it.error && it.dim; });
+        if (!validItems.length) return;
+        busy = true;
+        draw();
+        var errEl = F.$('#jpErr', root);
+        if (errEl) errEl.innerHTML = '';
+
+        F.LIB.pdflib().then(function (PDFLib) {
+          return PDFLib.PDFDocument.create().then(function (pdfDoc) {
+            return validItems.reduce(function (p, it, index) {
+              return p.then(function () {
+                var prog = F.$('.summary', root);
+                if (prog) prog.textContent = 'Memproses foto ' + (index + 1) + ' dari ' + validItems.length + '...';
+                return itemToJpgBytes(it, quality);
+              }).then(function (imgData) {
+                return pdfDoc.embedJpg(imgData.bytes).then(function (embeddedImg) {
+                  var m = margin || 0;
+                  var pW, pH, dX, dY, dW, dH;
+
+                  if (pageSize === 'fit') {
+                    pW = imgData.width + m * 2;
+                    pH = imgData.height + m * 2;
+                    dX = m;
+                    dY = m;
+                    dW = imgData.width;
+                    dH = imgData.height;
+                  } else {
+                    var baseW = 595.28, baseH = 841.89; // A4 default
+                    if (pageSize === 'letter') { baseW = 612; baseH = 792; }
+                    else if (pageSize === 'legal') { baseW = 612; baseH = 1008; }
+
+                    var isLand = false;
+                    if (orientation === 'landscape') isLand = true;
+                    else if (orientation === 'portrait') isLand = false;
+                    else isLand = (imgData.width > imgData.height);
+
+                    pW = isLand ? Math.max(baseW, baseH) : Math.min(baseW, baseH);
+                    pH = isLand ? Math.min(baseW, baseH) : Math.max(baseW, baseH);
+
+                    var availW = Math.max(1, pW - m * 2);
+                    var availH = Math.max(1, pH - m * 2);
+                    var scale = Math.min(availW / imgData.width, availH / imgData.height);
+                    dW = imgData.width * scale;
+                    dH = imgData.height * scale;
+                    dX = m + (availW - dW) / 2;
+                    dY = m + (availH - dH) / 2;
+                  }
+
+                  var page = pdfDoc.addPage([pW, pH]);
+                  page.drawImage(embeddedImg, { x: dX, y: dY, width: dW, height: dH });
+                });
+              });
+            }, Promise.resolve()).then(function () {
+              return pdfDoc.save();
+            }).then(function (pdfBytes) {
+              var blob = new Blob([pdfBytes], { type: 'application/pdf' });
+              result = {
+                blob: blob,
+                pages: pdfDoc.getPageCount(),
+                url: URL.createObjectURL(blob)
+              };
+              busy = false;
+              draw();
+              F.toast('Dokumen PDF berhasil dibuat!');
+            });
+          });
+        }).catch(function (err) {
+          console.error(err);
+          busy = false;
+          draw();
+          var errEl = F.$('#jpErr', root);
+          if (errEl) errEl.innerHTML = '<div class="notice notice-error">' + icon('alert') + '<span>' + esc(err.message || 'Gagal membuat dokumen PDF') + '</span></div>';
+        });
+      }
+    });
+  };
+
   /* ---------------- Merge PDF ---------------- */
   IMPL['merge-pdf'] = function (root, t) {
     var items = [], seq = 0, result = null, busy = false, dragId = null;

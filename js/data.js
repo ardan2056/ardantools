@@ -54,7 +54,7 @@ window.ADS = {
   }
 };
 
-window.POPULAR = ['file-translator', 'hd-photo-enhancer', 'pdf-compressor', 'qr-code-generator', 'auto-video-editor', 'word-counter', 'json-formatter'];
+window.POPULAR = ['file-translator', 'hd-photo-enhancer', 'pdf-compressor', 'qr-code-generator', 'jpg-to-pdf', 'auto-video-editor', 'word-counter', 'json-formatter'];
 
 /* Tools — in the same order as the home page grid (Top 4 Featured Tools) */
 window.TOOLS = [
@@ -351,7 +351,7 @@ window.TOOLS = [
     accept: 'application/pdf,.pdf', maxFiles: 1,
     dropTitle: 'Drop your PDF document here to extract JPG pages',
     dropSub: 'Tanpa batasan ukuran file (Unlimited MB) · Rendered locally',
-    related: ['merge-pdf', 'pdf-compressor', 'jpg-to-png'],
+    related: ['jpg-to-pdf', 'merge-pdf', 'pdf-compressor', 'jpg-to-png'],
     howto: [
       ['Upload PDF', 'Select or drop your PDF file.'],
       ['Preview Pages', 'Browse thumbnails of every extracted page.'],
@@ -363,6 +363,41 @@ window.TOOLS = [
     faq: [
       ['Does it work with multi-page PDFs?', 'Yes. Each page becomes a separate image, downloadable individually or as a ZIP.'],
       ['Will small text be readable?', 'Yes. Pages are rendered at high DPI so small fonts and tables stay crisp.']
+    ]
+  },
+  {
+    slug: 'jpg-to-pdf', name: 'JPG to PDF Converter (Foto ke PDF)', cat: 'pdf', label: 'Image to PDF', icon: 'fileImage', ad: 'privacy',
+    desc: 'Ubah dan gabungkan foto JPG, JPEG, PNG, dan WebP menjadi satu dokumen PDF rapi langsung di browser tanpa batas ukuran.',
+    intro: 'Konversi satu atau banyak foto / gambar (JPG, PNG, WebP) menjadi file dokumen PDF berkualitas tinggi. Atur urutan halaman, ukuran kertas (Fit / A4 / Letter), margin, dan orientasi secara instan dan 100% privat.',
+    keywords: 'jpg to pdf foto ke pdf gambar ke pdf image to pdf convert jpeg png webp combine doc unlimited gratis',
+    formats: ['JPG, JPEG, PNG, WebP, BMP'],
+    accept: 'image/jpeg,image/png,image/webp,image/bmp,.jpg,.jpeg,.png,.webp,.bmp', maxFiles: 100,
+    dropTitle: 'Tarik & lepas foto / gambar di sini untuk dijadikan PDF',
+    dropSub: 'Mendukung multi-file JPG, PNG, WebP · Atur urutan halaman · 100% In-Browser & Unlimited MB',
+    related: ['pdf-to-jpg', 'merge-pdf', 'pdf-compressor', 'image-compressor'],
+    howto: [
+      ['Pilih Foto / Gambar', 'Tarik atau pilih satu atau beberapa file foto (JPG, PNG, WebP).'],
+      ['Atur Urutan & Tata Letak', 'Geser urutan halaman, pilih ukuran kertas (Fit / A4 / Letter), orientasi, dan margin.'],
+      ['Konversi & Unduh PDF', 'Klik Konversi ke PDF lalu simpan dokumen PDF Anda seketika.']
+    ],
+    features: [
+      'Gabungkan banyak foto sekaligus menjadi satu dokumen PDF',
+      'Pilihan ukuran halaman: Sesuai Gambar (Fit), A4, Letter, atau Legal',
+      'Orientasi otomatis (Auto-rotate) atau sesuaikan manual Portrait/Landscape',
+      'Pilihan margin halaman (Tanpa Margin, Tipis, Normal, Lebar)',
+      'Thumbnail preview & fitur urutkan halaman (Move Up / Down)',
+      '100% Client-Side: File tidak pernah diunggah ke server'
+    ],
+    privacy: 'Proses konversi foto ke PDF berjalan 100% di browser Anda menggunakan Canvas & PDF-Lib. Foto Anda tidak pernah dikirim ke internet atau server.',
+    uses: [
+      'Menggabungkan foto dokumen, KTP, ijazah, atau kwitansi menjadi satu berkas PDF resmi.',
+      'Membuat e-book foto atau kompilasi album gambar siap cetak.',
+      'Mengirimkan tugas sekolah atau berkas lamaran kerja yang mensyaratkan format PDF.'
+    ],
+    faq: [
+      ['Apakah bisa menggabungkan banyak foto sekaligus?', 'Ya, Anda bisa memasukkan puluhan hingga ratusan foto sekaligus dan mengurutkannya sesuai keinginan.'],
+      ['Apakah kualitas gambar akan menurun?', 'Anda bisa memilih tingkat kualitas dari Tinggi (92%) hingga Maksimum (100% tanpa kompresi).'],
+      ['Apakah ukuran halaman bisa seragam A4?', 'Bisa. Tersedia pilihan ukuran A4, Letter, Legal, maupun ukuran asli foto (Fit).']
     ]
   },
   {
