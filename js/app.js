@@ -193,6 +193,12 @@
     else location.hash = path;
   }
   document.addEventListener('click', function (e) {
+    var pwaBtn = e.target.closest && e.target.closest('#pwaInstallBtn, #pwaInstallBtnMob');
+    if (pwaBtn) {
+      e.preventDefault();
+      triggerPwaInstall();
+      return;
+    }
     var themeBtn = e.target.closest && e.target.closest('#themeToggleBtn, #themeToggleBtnMob');
     if (themeBtn) {
       e.preventDefault();
@@ -255,6 +261,43 @@
     setTheme(getTheme() === 'dark' ? 'light' : 'dark');
   }
 
+  /* ---------- PWA Install Management ---------- */
+  var deferredPwaPrompt = null;
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferredPwaPrompt = e;
+    $$('#pwaInstallBtn, #pwaInstallBtnMob').forEach(function (btn) {
+      btn.style.display = 'inline-flex';
+    });
+  });
+
+  window.addEventListener('appinstalled', function () {
+    deferredPwaPrompt = null;
+    $$('#pwaInstallBtn, #pwaInstallBtnMob').forEach(function (btn) {
+      btn.style.display = 'none';
+    });
+    F.toast('Ardan Tools berhasil terpasang di perangkat Anda!');
+  });
+
+  function triggerPwaInstall() {
+    if (deferredPwaPrompt) {
+      deferredPwaPrompt.prompt();
+      deferredPwaPrompt.userChoice.then(function (res) {
+        if (res.outcome === 'accepted') {
+          F.toast('Memasang Ardan Tools...');
+        }
+        deferredPwaPrompt = null;
+      });
+    } else {
+      var isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      if (isIos) {
+        alert('Cara Install di iPhone / iPad:\n1. Ketuk tombol Bagikan (Share / ikon kotak panah ke atas) di bawah Safari.\n2. Gulir ke bawah lalu pilih "Tambahkan ke Layar Utama" (Add to Home Screen).\n3. Ketuk "Tambah" (Add) di kanan atas.');
+      } else {
+        alert('Cara Install di HP Android / Laptop:\n1. Buka menu browser (ikon titik tiga di kanan atas).\n2. Pilih "Instal aplikasi" atau "Tambahkan ke Layar Utama" (Add to Home screen).');
+      }
+    }
+  }
+
   /* ---------- Favorites & Recent Tools (Quick Access) ---------- */
   function getFavTools() {
     try { return JSON.parse(localStorage.getItem('ardan_favs') || '[]'); } catch (e) { return []; }
@@ -301,13 +344,19 @@
       L('/', '<span class="logo-mark">' + LOGO + '</span><span class="logo-text"><span class="logo-name">' + esc(SITE.name) + '</span><span class="logo-tag">' + esc(SITE.tagline) + '</span></span>', 'logo', ' aria-label="' + esc(SITE.name) + ' home"') +
       '<nav class="main-nav" aria-label="Categories">' + nav + '</nav>' +
       '<div class="header-right">' +
+      '<button class="btn btn-sm btn-dark" id="pwaInstallBtn" style="display:none;align-items:center;gap:6px" title="Install Ardan Tools ke HP/PC">' +
+        icon('downloadCloud', 'icon-sm') + '<span>Install App</span>' +
+      '</button>' +
       '<button class="theme-toggle-btn" id="themeToggleBtn" aria-label="Ganti mode gelap/terang" title="Ganti Mode Gelap / Terang">' +
         icon(getTheme() === 'dark' ? 'sun' : 'moon') +
       '</button>' +
       '<a href="/#all-tools" class="nav-cta-btn" id="navExploreBtn"><span>Explore Tools</span>' + icon('sparkles', 'icon-sm') + '</a>' +
       '<button class="menu-toggle" id="menuToggle" aria-label="Open menu">' + icon('menu') + '</button>' +
       '</div></div><nav class="mobile-nav" id="mobileNav">' + mob +
-      '<div style="padding:10px 18px"><button class="btn btn-sm" id="themeToggleBtnMob" style="width:100%">' + icon(getTheme() === 'dark' ? 'sun' : 'moon') + (getTheme() === 'dark' ? ' Mode Terang' : ' Mode Gelap') + '</button></div>' +
+      '<div style="padding:10px 18px;display:flex;flex-direction:column;gap:8px">' +
+        '<button class="btn btn-sm" id="themeToggleBtnMob" style="width:100%">' + icon(getTheme() === 'dark' ? 'sun' : 'moon') + (getTheme() === 'dark' ? ' Mode Terang' : ' Mode Gelap') + '</button>' +
+        '<button class="btn btn-sm btn-primary" id="pwaInstallBtnMob" style="width:100%;display:none;align-items:center;justify-content:center;gap:6px">' + icon('downloadCloud', 'icon-sm') + '<span>Install Aplikasi ke HP</span></button>' +
+      '</div>' +
       '</nav></header>';
   }
   function trustStrip() {
