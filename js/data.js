@@ -54,7 +54,7 @@ window.ADS = {
   }
 };
 
-window.POPULAR = ['file-translator', 'hd-photo-enhancer', 'pdf-compressor', 'qr-code-generator', 'jpg-to-pdf', 'auto-video-editor', 'word-counter', 'json-formatter'];
+window.POPULAR = ['file-translator', 'hd-photo-enhancer', 'pdf-compressor', 'qr-code-generator', 'jpg-to-pdf', 'video-to-mp3', 'auto-video-editor', 'word-counter', 'json-formatter'];
 
 /* Tools — in the same order as the home page grid (Top 4 Featured Tools) */
 window.TOOLS = [
@@ -179,6 +179,41 @@ window.TOOLS = [
       ['Bagaimana cara kerja pemotongan berdasarkan narasi?', 'Sistem membaca spektrum gelombang suara pembicara dan mencocokkan intensitas energi vokal dengan naskah narasi. Jeda hening panjang, keraguan (filler), atau kalimat gagal take otomatis ditandai merah [CUT].'],
       ['Apakah saya bisa membatalkan atau mengubah potongan?', 'Bisa! Anda cukup mengklik segmen mana saja di timeline interaktif atau daftar segmen untuk mengubah statusnya antara [KEEP] (simpan) atau [CUT] (potong).'],
       ['Bagaimana cara menyimpan video berukuran sangat besar?', 'Untuk video gigabyte besar, Anda bisa mengunduh rekaman browser langsung ATAU menyalin 1 baris perintah FFmpeg Lossless yang kami buatkan otomatis untuk memotong video dalam 2 detik tanpa penurunan kualitas sama sekali!']
+    ]
+  },
+  {
+    slug: 'video-to-mp3', name: 'Video to Audio & MP3 Extractor (Ekstrak Audio Video)', cat: 'video', label: 'Audio Extractor', icon: 'music', ad: 'privacy',
+    desc: 'Ambil dan ekstrak suara, lagu, narasi, atau musik latar dari video ke format WAV & MP3 studio 100% lokal di browser tanpa batas ukuran file.',
+    intro: 'Ekstrak trek suara atau instrumen musik dari berbagai format video (MP4, MKV, WebM, MOV, AVI) ke file audio beresolusi tinggi (WAV / MP3). Bebas ukuran file, bebas kuota upload, dan diproses seketika di perangkat Anda.',
+    keywords: 'video to mp3 convert video to audio ekstrak lagu suara musik wav m4a opus unlimited gratis',
+    formats: ['MP4 (.mp4)', 'WebM (.webm)', 'MOV (.mov)', 'MKV (.mkv)', 'AVI (.avi)', 'M4V (.m4v)'],
+    accept: 'video/*,.mp4,.webm,.mkv,.mov,.avi,.m4v,.flv', maxFiles: 1,
+    dropTitle: 'Tarik & lepas file video di sini untuk diekstrak suaranya',
+    dropSub: 'Mendukung MP4, MKV, WebM, MOV · Ekstrak ke format WAV & MP3 · Unlimited MB & 100% Privat',
+    related: ['auto-video-editor', 'file-translator', 'hd-photo-enhancer'],
+    howto: [
+      ['Pilih Video', 'Tarik atau pilih file video format apa saja tanpa batasan ukuran MB/GB.'],
+      ['Atur Format & Channel', 'Pilih format audio (WAV Studio / MP3), Sample Rate (48kHz / 44.1kHz), dan Channel (Stereo / Mono).'],
+      ['Dengarkan & Unduh', 'Putar audio hasil ekstraksi langsung di pemutar browser lalu klik Unduh Audio.']
+    ],
+    features: [
+      'Ekstrak audio dari semua format video (MP4, WebM, MOV, MKV, AVI)',
+      'Pilihan format WAV (Studio Uncompressed 16-bit PCM) dan MP3 / WebM Audio',
+      'Pilihan Sample Rate: 48,000 Hz (Standar Video/Film) atau 44,100 Hz (CD Audio)',
+      'Pilihan Channel: Stereo (2 channel) atau Mono (1 channel)',
+      'Audio player bawaan untuk mendengarkan hasil langsung sebelum diunduh',
+      '100% Client-Side: File video tidak pernah diunggah ke server (Zero Server Uploads)'
+    ],
+    privacy: 'Privasi mutlak terjamin. File video dibaca dan diproses sepenuhnya di memori komputer/HP Anda menggunakan Web Audio API.',
+    uses: [
+      'Mengambil lagu latar belakang atau sound effect dari video klip YouTube/TikTok/Reels.',
+      'Mengekstrak rekaman ceramah, rapat Zoom, atau materi kuliah menjadi audio podcast yang hemat ruang.',
+      'Menyimpan narasi suara pembicara dari video untuk diedit kembali di software audio.'
+    ],
+    faq: [
+      ['Apakah ada batas durasi atau ukuran file video?', 'Tidak ada batasan ukuran file video (Unlimited MB/GB). Video besar sekalipun tetap bisa diproses di browser Anda.'],
+      ['Format audio apa yang paling bagus?', 'Format WAV memberikan kualitas suara murni studio (Lossless PCM 16-bit) tanpa kompresi, sangat cocok untuk pemutar musik, HP, dan editing.'],
+      ['Apakah perlu koneksi internet untuk mengekstrak?', 'Hanya saat pertama membuka halaman web. Setelah halaman terbuka (atau di-install via PWA), proses ekstraksi berjalan 100% offline tanpa internet!']
     ]
   },
   {

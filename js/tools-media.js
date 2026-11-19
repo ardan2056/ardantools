@@ -2917,4 +2917,223 @@
       if (videoUrl) URL.revokeObjectURL(videoUrl);
     });
   };
+
+  /* ==========================================================================
+     VIDEO TO MP3 / AUDIO EXTRACTOR (Ekstraktor Audio & Musik Video)
+     ========================================================================== */
+  IMPL['video-to-mp3'] = function (root, t) {
+    var file = null, audioBuf = null, busy = false, outBlob = null, outUrl = null;
+    var outFormat = 'wav';
+    var channelsOpt = 'stereo';
+
+    root.innerHTML =
+      '<div class="toolbar" style="gap:16px;margin-bottom:18px;flex-wrap:wrap;align-items:flex-end">' +
+        '<div class="field">' +
+          '<label class="label">Format Output</label>' +
+          '<div class="seg" id="vaFormat">' +
+            '<button data-val="wav" class="active" title="WAV Studio 16-bit PCM (Lossless)">WAV (Studio Lossless)</button>' +
+            '<button data-val="webm" title="WebM / Opus Audio (Hemat Ukuran)">WebM Audio</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="field">' +
+          '<label class="label">Channel Audio</label>' +
+          '<div class="seg" id="vaChannel">' +
+            '<button data-val="stereo" class="active">Stereo (2 Ch)</button>' +
+            '<button data-val="mono">Mono (1 Ch)</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div id="vaDrop"></div>' +
+      '<div id="vaBody" style="margin-top:20px;display:none"></div>';
+
+    var drop = F.dropzone({
+      accept: t.accept, maxMB: t.maxMB, maxFiles: 1, title: t.dropTitle, sub: t.dropSub,
+      test: function (f) { return /^video\//i.test(f.type) || /\.(mp4|webm|mkv|mov|avi|m4v|flv|wmv|ts)$/i.test(f.name); },
+      onFiles: function (files) {
+        if (!files.length) return;
+        loadFile(files[0]);
+      }
+    });
+    F.$('#vaDrop', root).appendChild(drop);
+
+    function bindSeg(id, callback) {
+      var el = F.$('#' + id, root);
+      if (!el) return;
+      el.addEventListener('click', function (e) {
+        var btn = e.target.closest('button[data-val]');
+        if (!btn) return;
+        Array.from(el.querySelectorAll('button')).forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        callback(btn.getAttribute('data-val'));
+      });
+    }
+
+    bindSeg('vaFormat', function (val) { outFormat = val; if (audioBuf && !busy) generateOutput(); });
+    bindSeg('vaChannel', function (val) { channelsOpt = val; if (audioBuf && !busy) generateOutput(); });
+
+    function formatDuration(sec) {
+      if (!isFinite(sec)) return '0:00';
+      var m = Math.floor(sec / 60);
+      var s = Math.floor(sec % 60);
+      return m + ':' + (s < 10 ? '0' : '') + s;
+    }
+
+    function encodeWav(buffer, isMono) {
+      var numChannels = isMono ? 1 : Math.min(2, buffer.numberOfChannels);
+      var sampleRate = buffer.sampleRate;
+      var numSamples = buffer.length;
+      var blockAlign = numChannels * 2;
+      var byteRate = sampleRate * blockAlign;
+      var dataSize = numSamples * blockAlign;
+      var wavBuffer = new ArrayBuffer(44 + dataSize);
+      var view = new DataView(wavBuffer);
+
+      function writeStr(offset, str) {
+        for (var i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+      }
+
+      writeStr(0, 'RIFF');
+      view.setUint32(4, 36 + dataSize, true);
+      writeStr(8, 'WAVE');
+      writeStr(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, numChannels, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, byteRate, true);
+      view.setUint16(32, blockAlign, true);
+      view.setUint16(34, 16, true);
+      writeStr(36, 'data');
+      view.setUint32(40, dataSize, true);
+
+      var left = buffer.getChannelData(0);
+      var right = (numChannels === 2 && buffer.numberOfChannels > 1) ? buffer.getChannelData(1) : left;
+      var offset = 44;
+
+      for (var i = 0; i < numSamples; i++) {
+        var s = Math.max(-1, Math.min(1, left[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+        offset += 2;
+        if (numChannels === 2) {
+          s = Math.max(-1, Math.min(1, right[i]));
+          view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+          offset += 2;
+        }
+      }
+
+      return new Blob([wavBuffer], { type: 'audio/wav' });
+    }
+
+    function generateOutput() {
+      if (!audioBuf) return;
+      busy = true;
+      drawBody();
+      setTimeout(function () {
+        try {
+          if (outUrl) try { URL.revokeObjectURL(outUrl); } catch (_) {}
+          var isMono = (channelsOpt === 'mono');
+          outBlob = encodeWav(audioBuf, isMono);
+          outUrl = URL.createObjectURL(outBlob);
+          busy = false;
+          drawBody();
+          F.toast('Audio berhasil diekstrak!');
+        } catch (err) {
+          console.error(err);
+          busy = false;
+          drawBody(err.message || 'Gagal mengekstrak audio');
+        }
+      }, 50);
+    }
+
+    function loadFile(f) {
+      file = f;
+      busy = true;
+      audioBuf = null;
+      outBlob = null;
+      if (outUrl) try { URL.revokeObjectURL(outUrl); outUrl = null; } catch (_) {}
+      drop.classList.add('compact');
+      var body = F.$('#vaBody', root);
+      body.style.display = 'block';
+      body.innerHTML = '<div class="notice notice-info">' + icon('clock') + '<span>Membaca dan memproses trek audio dari <strong>' + esc(f.name) + '</strong> (' + F.formatBytes(f.size) + ')... Mohon tunggu sebentar.</span></div>';
+
+      F.readArrayBuffer(f).then(function (buf) {
+        var Actx = window.AudioContext || window.webkitAudioContext;
+        if (!Actx) throw new Error('Web Audio API tidak didukung browser ini.');
+        var actx = new Actx();
+        return actx.decodeAudioData(buf);
+      }).then(function (decoded) {
+        audioBuf = decoded;
+        generateOutput();
+      }).catch(function (err) {
+        console.error(err);
+        busy = false;
+        drawBody(err.message || 'Tidak dapat membaca track audio dari video ini. Pastikan file memiliki audio.');
+      });
+    }
+
+    function drawBody(errMsg) {
+      var body = F.$('#vaBody', root);
+      if (!body) return;
+      body.style.display = 'block';
+
+      if (errMsg) {
+        body.innerHTML = '<div class="notice notice-error">' + icon('alert') + '<span>' + esc(errMsg) + '</span></div>' +
+          '<button class="btn" data-act="reset" style="margin-top:12px">' + icon('upload') + 'Pilih Video Lain</button>';
+        return;
+      }
+
+      if (busy) {
+        body.innerHTML = '<div class="notice notice-info">' + icon('clock') + '<span>Mengekstrak dan mengonversi audio ke ' + outFormat.toUpperCase() + ' (' + channelsOpt + ')...</span></div>';
+        return;
+      }
+
+      if (!file || !audioBuf || !outBlob) return;
+
+      var baseName = F.baseName(file.name);
+      var outExt = outFormat === 'webm' ? 'webm' : 'wav';
+      var outName = baseName + '-audio.' + outExt;
+
+      body.innerHTML =
+        '<div class="notice notice-ok" style="margin-bottom:18px">' +
+          icon('checkCircle') +
+          '<span>Audio berhasil diekstrak! Durasi: <strong>' + formatDuration(audioBuf.duration) + '</strong> · Sample rate: <strong>' + audioBuf.sampleRate + ' Hz</strong> · Ukuran audio: <strong>' + F.formatBytes(outBlob.size) + '</strong></span>' +
+        '</div>' +
+        '<div style="background:var(--surface);padding:20px;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--neu-flat-sm);margin-bottom:20px">' +
+          '<div style="font-weight:700;font-size:14px;margin-bottom:10px;color:var(--text);display:flex;align-items:center;gap:8px">' +
+            icon('music', 'icon-sm') + '<span>Pratinjau Audio (Player):</span>' +
+          '</div>' +
+          '<audio controls style="width:100%;height:44px;outline:none" src="' + outUrl + '"></audio>' +
+        '</div>' +
+        '<div class="list-footer">' +
+          '<span class="summary">' + esc(outName) + ' (' + F.formatBytes(outBlob.size) + ')</span>' +
+          '<div class="toolbar">' +
+            '<button class="btn" data-act="reset">' + icon('upload') + 'Pilih Video Lain</button>' +
+            '<button class="btn btn-primary btn-lg" data-act="dl">' + icon('download') + 'Unduh Audio (' + outExt.toUpperCase() + ')</button>' +
+          '</div>' +
+        '</div>';
+    }
+
+    root.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-act]');
+      if (!b) return;
+      var a = b.getAttribute('data-act');
+      if (a === 'reset') {
+        file = null;
+        audioBuf = null;
+        outBlob = null;
+        if (outUrl) try { URL.revokeObjectURL(outUrl); outUrl = null; } catch (_) {}
+        drop.classList.remove('compact');
+        var body = F.$('#vaBody', root);
+        if (body) { body.innerHTML = ''; body.style.display = 'none'; }
+      } else if (a === 'dl' && outBlob) {
+        var baseName = file ? F.baseName(file.name) : 'extracted-audio';
+        var outExt = outFormat === 'webm' ? 'webm' : 'wav';
+        F.download(outBlob, baseName + '-audio.' + outExt);
+      }
+    });
+
+    F.onCleanup(function () {
+      if (outUrl) try { URL.revokeObjectURL(outUrl); } catch (_) {}
+    });
+  };
 })();

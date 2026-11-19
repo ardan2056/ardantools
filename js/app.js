@@ -32,6 +32,12 @@
     zap: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
     userX: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5M22 8l-5 5"/>',
     lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    sun: '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
+    moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+    star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    starFilled: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor"/>',
+    music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+    downloadCloud: '<polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/>',
     cpu: '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/>',
     gift: '<path d="M20 12v10H4V12"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',
     globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
@@ -187,6 +193,37 @@
     else location.hash = path;
   }
   document.addEventListener('click', function (e) {
+    var themeBtn = e.target.closest && e.target.closest('#themeToggleBtn, #themeToggleBtnMob');
+    if (themeBtn) {
+      e.preventDefault();
+      toggleTheme();
+      return;
+    }
+    var favBtn = e.target.closest && e.target.closest('.tool-fav-btn');
+    if (favBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      var slug = favBtn.getAttribute('data-fav');
+      var isNowFav = toggleFavTool(slug);
+      favBtn.classList.toggle('is-fav', isNowFav);
+      favBtn.innerHTML = icon(isNowFav ? 'starFilled' : 'star', 'icon-sm');
+      favBtn.title = isNowFav ? 'Hapus dari favorit' : 'Tambah ke favorit';
+      var qa = $('#qaContainer');
+      if (qa && typeof renderQuickAccess === 'function') {
+        qa.innerHTML = renderQuickAccess();
+      }
+      return;
+    }
+    var clearRecent = e.target.closest && e.target.closest('#quickClearBtn');
+    if (clearRecent) {
+      e.preventDefault();
+      try { localStorage.removeItem('ardan_recent'); } catch (_) {}
+      var qa = $('#qaContainer');
+      if (qa && typeof renderQuickAccess === 'function') {
+        qa.innerHTML = renderQuickAccess();
+      }
+      return;
+    }
     var a = e.target.closest && e.target.closest('a[data-link]');
     if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
     if (MODE === 'path') { e.preventDefault(); navigate(a.getAttribute('data-path')); }
@@ -196,6 +233,56 @@
 
   function L(path, inner, cls, extra) {
     return '<a href="' + href(path) + '" data-link data-path="' + path + '"' + (cls ? ' class="' + cls + '"' : '') + (extra || '') + '>' + inner + '</a>';
+  }
+
+  /* ---------- Theme Management (Dark / Light Mode) ---------- */
+  function getTheme() {
+    return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  }
+  function setTheme(t) {
+    if (t === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      try { localStorage.setItem('ardan_theme', 'dark'); } catch (e) {}
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      try { localStorage.setItem('ardan_theme', 'light'); } catch (e) {}
+    }
+    $$('#themeToggleBtn, #themeToggleBtnMob').forEach(function (btn) {
+      btn.innerHTML = icon(t === 'dark' ? 'sun' : 'moon');
+    });
+  }
+  function toggleTheme() {
+    setTheme(getTheme() === 'dark' ? 'light' : 'dark');
+  }
+
+  /* ---------- Favorites & Recent Tools (Quick Access) ---------- */
+  function getFavTools() {
+    try { return JSON.parse(localStorage.getItem('ardan_favs') || '[]'); } catch (e) { return []; }
+  }
+  function isToolFav(slug) {
+    return getFavTools().indexOf(slug) >= 0;
+  }
+  function toggleFavTool(slug) {
+    try {
+      var favs = getFavTools();
+      var idx = favs.indexOf(slug);
+      var added = false;
+      if (idx >= 0) favs.splice(idx, 1);
+      else { favs.unshift(slug); added = true; }
+      localStorage.setItem('ardan_favs', JSON.stringify(favs));
+      return added;
+    } catch (e) { return false; }
+  }
+  function getRecentTools() {
+    try { return JSON.parse(localStorage.getItem('ardan_recent') || '[]'); } catch (e) { return []; }
+  }
+  function recordRecentTool(slug) {
+    try {
+      var list = getRecentTools().filter(function (s) { return s !== slug; });
+      list.unshift(slug);
+      if (list.length > 8) list = list.slice(0, 8);
+      localStorage.setItem('ardan_recent', JSON.stringify(list));
+    } catch (e) {}
   }
 
   /* ---------- Layout ---------- */
@@ -214,9 +301,14 @@
       L('/', '<span class="logo-mark">' + LOGO + '</span><span class="logo-text"><span class="logo-name">' + esc(SITE.name) + '</span><span class="logo-tag">' + esc(SITE.tagline) + '</span></span>', 'logo', ' aria-label="' + esc(SITE.name) + ' home"') +
       '<nav class="main-nav" aria-label="Categories">' + nav + '</nav>' +
       '<div class="header-right">' +
+      '<button class="theme-toggle-btn" id="themeToggleBtn" aria-label="Ganti mode gelap/terang" title="Ganti Mode Gelap / Terang">' +
+        icon(getTheme() === 'dark' ? 'sun' : 'moon') +
+      '</button>' +
       '<a href="/#all-tools" class="nav-cta-btn" id="navExploreBtn"><span>Explore Tools</span>' + icon('sparkles', 'icon-sm') + '</a>' +
       '<button class="menu-toggle" id="menuToggle" aria-label="Open menu">' + icon('menu') + '</button>' +
-      '</div></div><nav class="mobile-nav" id="mobileNav">' + mob + '</nav></header>';
+      '</div></div><nav class="mobile-nav" id="mobileNav">' + mob +
+      '<div style="padding:10px 18px"><button class="btn btn-sm" id="themeToggleBtnMob" style="width:100%">' + icon(getTheme() === 'dark' ? 'sun' : 'moon') + (getTheme() === 'dark' ? ' Mode Terang' : ' Mode Gelap') + '</button></div>' +
+      '</nav></header>';
   }
   function trustStrip() {
     var items = [
@@ -250,7 +342,12 @@
   }
   function toolCard(t) {
     var c = CATEGORIES[t.cat];
-    return '<article class="tool-card cat-' + t.cat + '"><div class="tool-card-top"><span class="tool-icon">' + icon(t.icon) + '</span><span class="cat-label">' + esc(c.name) + '</span></div>' +
+    var isFav = isToolFav(t.slug);
+    return '<article class="tool-card cat-' + t.cat + '"><div class="tool-card-top"><span class="tool-icon">' + icon(t.icon) + '</span>' +
+      '<div class="tool-card-badges"><span class="cat-label">' + esc(c.name) + '</span>' +
+      '<button class="tool-fav-btn' + (isFav ? ' is-fav' : '') + '" data-fav="' + t.slug + '" title="' + (isFav ? 'Hapus dari favorit' : 'Tambah ke favorit') + '" aria-label="Favorite">' +
+        icon(isFav ? 'starFilled' : 'star', 'icon-sm') +
+      '</button></div></div>' +
       '<h3>' + esc(t.name) + '</h3><p>' + esc(t.desc) + '</p>' + L('/tools/' + t.slug, 'Use Tool ' + icon('arrowRight', 'icon-sm'), 'btn btn-sm card-link') + '</article>';
   }
   function setMeta(title, desc) {
@@ -323,12 +420,38 @@
       '</div>';
     }
 
+    function renderQuickAccess() {
+      var favs = getFavTools();
+      var recents = getRecentTools().filter(function (s) { return favs.indexOf(s) < 0; });
+      var combined = favs.concat(recents).slice(0, 8);
+      if (!combined.length) return '';
+      var chips = combined.map(function (slug) {
+        var tool = TOOL_MAP[slug];
+        if (!tool) return '';
+        var isFav = favs.indexOf(slug) >= 0;
+        return '<a href="' + href('/tools/' + tool.slug) + '" data-link data-path="/tools/' + tool.slug + '" class="quick-chip" title="' + esc(tool.desc) + '">' +
+          '<span class="quick-chip-icon" style="color:var(--primary)">' + icon(tool.icon, 'icon-sm') + '</span>' +
+          '<span>' + esc(tool.name.split(' (')[0]) + '</span>' +
+          (isFav ? '<span style="color:#f59e0b;font-size:11px">★</span>' : '') +
+        '</a>';
+      }).filter(Boolean).join('');
+      if (!chips) return '';
+      return '<div class="quick-access-strip" id="quickAccessStrip">' +
+        '<div class="quick-access-head">' +
+          '<span class="quick-access-label"><span class="quick-star">★</span> Favorit &amp; Terakhir Digunakan</span>' +
+          '<button class="quick-clear-btn" id="quickClearBtn" title="Bersihkan riwayat">Hapus Riwayat</button>' +
+        '</div>' +
+        '<div class="quick-access-chips">' + chips + '</div>' +
+      '</div>';
+    }
+
     var html = header('') + '<main>' +
       '<section class="hero hero-orbit-section">' +
       buildHeroOrbitBanner() +
       '</section>' +
       '<section class="section section-tools" id="all-tools"><div class="container">' +
       '<div class="section-head"><span class="kicker">' + icon('grid', 'icon-sm') + 'Tool Directory</span><h2>All Free Utilities</h2><p>Select any tool to start instant, private processing.</p></div>' +
+      '<div id="qaContainer">' + renderQuickAccess() + '</div>' +
       '<div class="tool-search">' + icon('search') + '<input type="search" id="toolSearch" placeholder="Search tools… e.g. compress image, pdf, json, svg, uuid" autocomplete="off" aria-label="Search tools"><button class="clear-search" id="clearSearch" aria-label="Clear search">' + icon('x') + '</button></div>' +
       '<div class="filter-tabs" role="tablist">' + tabs.map(function (t, i) {
         return '<button class="filter-tab' + (i === 0 ? ' active' : '') + '" data-filter="' + t[0] + '" role="tab">' + t[1] + '<span class="count">' + counts[t[0]] + '</span></button>';
@@ -480,6 +603,7 @@
   function pageTool(slug) {
     var t = TOOL_MAP[slug];
     if (!t) return pageNotFound();
+    recordRecentTool(slug);
     var c = CATEGORIES[t.cat];
     setMeta(t.name + ' - Free & Private Online Utility | ' + SITE.name, t.intro);
     var rel = t.related.map(function (s) { return TOOL_MAP[s]; }).filter(Boolean);
