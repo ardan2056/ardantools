@@ -462,7 +462,7 @@
     function buildHeroOrbitBanner() {
       var fanNodes = [
         { slug: 'file-translator', name: 'Doc Translator', icon: 'globe', deg: 165, arc: 'outer', color: 'badge-trans' },
-        { slug: 'merge-pdf', name: 'PDF Tools', icon: 'file', deg: 144, arc: 'mid', color: 'badge-pdf' },
+        { slug: 'pdf-to-word', name: 'PDF to Word', icon: 'file', deg: 144, arc: 'mid', color: 'badge-pdf' },
         { slug: 'hd-photo-enhancer', name: 'HD 4K Upscale', icon: 'sparkles', deg: 118, arc: 'outer', color: 'badge-hd' },
         { path: '/about', name: '100% Client-Side', icon: 'shieldCheck', deg: 90, arc: 'mid', color: 'badge-sec' },
         { slug: 'qr-code-generator', name: 'QR Code', icon: 'qr', deg: 64, arc: 'outer', color: 'badge-qr' },

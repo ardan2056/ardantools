@@ -1,5 +1,5 @@
 /* ===== Ardan Tools — Service Worker (PWA & Offline Processing 100%) ===== */
-const CACHE_NAME = 'ardan-cache-v4';
+const CACHE_NAME = 'ardan-cache-v5';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -67,20 +67,16 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Same-origin assets: Cache-first / Stale-while-revalidate
+  // Same-origin assets: Network-first with cache fallback (instant updates + offline support)
   if (url.origin === self.location.origin) {
     event.respondWith(
-      caches.match(req).then(cached => {
-        const fetchPromise = fetch(req).then(networkRes => {
-          if (networkRes && networkRes.status === 200) {
-            const clone = networkRes.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
-          }
-          return networkRes;
-        }).catch(() => cached);
-
-        return cached || fetchPromise;
-      })
+      fetch(req).then(networkRes => {
+        if (networkRes && networkRes.status === 200) {
+          const clone = networkRes.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
+        }
+        return networkRes;
+      }).catch(() => caches.match(req))
     );
     return;
   }

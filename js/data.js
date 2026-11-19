@@ -81,6 +81,45 @@ window.TOOLS = [
     ]
   },
   {
+    slug: 'pdf-to-word', name: 'PDF to Word Converter (PDF ke DOCX)', cat: 'pdf', label: 'PDF to DOCX', icon: 'file', ad: 'privacy',
+    desc: 'Konversi file PDF menjadi dokumen Microsoft Word (.docx) yang dapat diedit langsung di browser tanpa upload server & tanpa batas ukuran.',
+    intro: 'Ubah file PDF Anda menjadi dokumen Microsoft Word (.docx) yang 100% dapat diedit. Mempertahankan paragraf rapi, judul (heading), pemisahan halaman, dan teks dengan aman langsung di memori perangkat Anda tanpa batasan ukuran file.',
+    keywords: 'pdf to word pdf ke docx konversi pdf word docx convert editable edit ubah dokumen gratis tanpa batas unlimited',
+    formats: ['PDF (.pdf) → Word (.docx)'],
+    accept: 'application/pdf,.pdf', maxFiles: 1,
+    dropTitle: 'Tarik & lepas file PDF di sini untuk diubah ke Word (.docx)',
+    dropSub: '100% In-Browser · Tanpa Batas Ukuran (Unlimited MB) · Format .docx Dapat Diedit Penuh',
+    related: ['pdf-to-jpg', 'jpg-to-pdf', 'merge-pdf', 'split-pdf', 'pdf-compressor', 'file-translator'],
+    howto: [
+      ['Unggah File PDF', 'Tarik atau pilih dokumen PDF dari perangkat Anda (bebas ukuran MB).'],
+      ['Pilih Mode Tata Letak', 'Pilih mode "Paragraf Rapi & Heading" untuk hasil dokumen natural atau "Presisi Baris" untuk baris per baris.'],
+      ['Unduh File Word (.docx)', 'Sistem memproses di browser dan langsung mengunduh dokumen Word (.docx) yang siap diedit di MS Word, Google Docs, atau LibreOffice.']
+    ],
+    features: [
+      'Konversi 100% Client-Side: File PDF tidak pernah diunggah ke server, menjaga kerahasiaan 100%',
+      'Format Output Standar .docx (OpenXML) kompatibel penuh dengan Microsoft Word, Google Docs, dan WPS Office',
+      'Ekstraksi cerdas: Deteksi judul otomatis (Heading 1 & Heading 2) berdasarkan ukuran font',
+      'Pengelompokan paragraf cerdas: Menggabungkan baris yang terputus menjadi kalimat & paragraf utuh',
+      'Dukungan rentang halaman: Konversi semua halaman atau halaman tertentu (contoh: 1-5, 8)',
+      'Tanpa batas ukuran file: Mampu mengonversi dokumen PDF besar ratusan halaman',
+      'Pratinjau teks & statistik lengkap: Jumlah kata, karakter, halaman, dan ukuran dokumen',
+      'Tombol Salin Semua Teks untuk menyalin isi teks secara instan'
+    ],
+    privacy: 'Kerahasiaan terjamin mutlak: Pemrosesan PDF dan pembentukan file DOCX berlangsung 100% di memori browser lokal Anda.',
+    uses: [
+      'Mengedit dokumen PDF tugas kuliah, skripsi, atau laporan kantor di Microsoft Word.',
+      'Mengubah PDF scan formulir, surat resmi, atau kontrak kerja menjadi teks dokumen yang bisa diubah.',
+      'Mengekstrak teks bab atau halaman tertentu dari eBook atau buku PDF tebal.',
+      'Memperbaiki dokumen yang salah ketik tanpa perlu mengetik ulang dari awal.'
+    ],
+    faq: [
+      ['Apakah file DOCX hasil konversi bisa dibuka di Microsoft Word dan Google Docs?', 'Ya! File hasil konversi berformat standar OpenXML .docx yang kompatibel penuh dengan MS Word (2007 hingga versi terbaru), Office 365, Google Docs, LibreOffice Writer, dan WPS Office.'],
+      ['Apakah ada batasan jumlah halaman atau ukuran file?', 'Tidak ada batasan! Karena diproses langsung menggunakan CPU perangkat Anda (In-Browser), Anda bisa mengonversi file berapapun ukurannya tanpa biaya dan tanpa kuota.'],
+      ['Apakah dokumen saya aman?', 'Sangat aman! Berbeda dengan situs konverter online lain yang mengunggah dokumen Anda ke server asing, Ardan Tools memproses file 100% di peramban (browser) Anda. Data Anda tidak pernah keluar dari komputer atau HP Anda.'],
+      ['Bagaimana cara kerja deteksi paragrafnya?', 'Ardan Tools membaca posisi koordinat (X dan Y) serta ukuran font dari setiap kata dalam PDF, lalu merekonstruksi baris-baris teks menjadi paragraf mengalir dan heading dokumen yang rapi.']
+    ]
+  },
+  {
     slug: 'hd-photo-enhancer', name: 'HD Photo Enhancer (Pembuat Foto HD & 4K)', cat: 'image', label: 'Ultra HD 4K', icon: 'sparkles', ad: 'creative',
     desc: 'Enhance blurry photos to Ultra HD, upscale resolution up to 4x, unblur facial details, and restore colors in your browser.',
     intro: 'Transform low-resolution, blurry, or old photos into crystal-clear High Definition (Full HD & 4K). Unblur edges, boost clarity, denoise, and upscale up to 4x with an interactive before/after split slider.',
@@ -433,45 +472,6 @@ window.TOOLS = [
       ['Apakah bisa menggabungkan banyak foto sekaligus?', 'Ya, Anda bisa memasukkan puluhan hingga ratusan foto sekaligus dan mengurutkannya sesuai keinginan.'],
       ['Apakah kualitas gambar akan menurun?', 'Anda bisa memilih tingkat kualitas dari Tinggi (92%) hingga Maksimum (100% tanpa kompresi).'],
       ['Apakah ukuran halaman bisa seragam A4?', 'Bisa. Tersedia pilihan ukuran A4, Letter, Legal, maupun ukuran asli foto (Fit).']
-    ]
-  },
-  {
-    slug: 'pdf-to-word', name: 'PDF to Word Converter (PDF ke DOCX)', cat: 'pdf', label: 'PDF to DOCX', icon: 'file', ad: 'privacy',
-    desc: 'Konversi file PDF menjadi dokumen Microsoft Word (.docx) yang dapat diedit langsung di browser tanpa upload server & tanpa batas ukuran.',
-    intro: 'Ubah file PDF Anda menjadi dokumen Microsoft Word (.docx) yang 100% dapat diedit. Mempertahankan paragraf rapi, judul (heading), pemisahan halaman, dan teks dengan aman langsung di memori perangkat Anda tanpa batasan ukuran file.',
-    keywords: 'pdf to word pdf ke docx konversi pdf word docx convert editable edit ubah dokumen gratis tanpa batas unlimited',
-    formats: ['PDF (.pdf) → Word (.docx)'],
-    accept: 'application/pdf,.pdf', maxFiles: 1,
-    dropTitle: 'Tarik & lepas file PDF di sini untuk diubah ke Word (.docx)',
-    dropSub: '100% In-Browser · Tanpa Batas Ukuran (Unlimited MB) · Format .docx Dapat Diedit Penuh',
-    related: ['pdf-to-jpg', 'jpg-to-pdf', 'merge-pdf', 'split-pdf', 'pdf-compressor', 'file-translator'],
-    howto: [
-      ['Unggah File PDF', 'Tarik atau pilih dokumen PDF dari perangkat Anda (bebas ukuran MB).'],
-      ['Pilih Mode Tata Letak', 'Pilih mode "Paragraf Rapi & Heading" untuk hasil dokumen natural atau "Presisi Baris" untuk baris per baris.'],
-      ['Unduh File Word (.docx)', 'Sistem memproses di browser dan langsung mengunduh dokumen Word (.docx) yang siap diedit di MS Word, Google Docs, atau LibreOffice.']
-    ],
-    features: [
-      'Konversi 100% Client-Side: File PDF tidak pernah diunggah ke server, menjaga kerahasiaan 100%',
-      'Format Output Standar .docx (OpenXML) kompatibel penuh dengan Microsoft Word, Google Docs, dan WPS Office',
-      'Ekstraksi cerdas: Deteksi judul otomatis (Heading 1 & Heading 2) berdasarkan ukuran font',
-      'Pengelompokan paragraf cerdas: Menggabungkan baris yang terputus menjadi kalimat & paragraf utuh',
-      'Dukungan rentang halaman: Konversi semua halaman atau halaman tertentu (contoh: 1-5, 8)',
-      'Tanpa batas ukuran file: Mampu mengonversi dokumen PDF besar ratusan halaman',
-      'Pratinjau teks & statistik lengkap: Jumlah kata, karakter, halaman, dan ukuran dokumen',
-      'Tombol Salin Semua Teks untuk menyalin isi teks secara instan'
-    ],
-    privacy: 'Kerahasiaan terjamin mutlak: Pemrosesan PDF dan pembentukan file DOCX berlangsung 100% di memori browser lokal Anda.',
-    uses: [
-      'Mengedit dokumen PDF tugas kuliah, skripsi, atau laporan kantor di Microsoft Word.',
-      'Mengubah PDF scan formulir, surat resmi, atau kontrak kerja menjadi teks dokumen yang bisa diubah.',
-      'Mengekstrak teks bab atau halaman tertentu dari eBook atau buku PDF tebal.',
-      'Memperbaiki dokumen yang salah ketik tanpa perlu mengetik ulang dari awal.'
-    ],
-    faq: [
-      ['Apakah file DOCX hasil konversi bisa dibuka di Microsoft Word dan Google Docs?', 'Ya! File hasil konversi berformat standar OpenXML .docx yang kompatibel penuh dengan MS Word (2007 hingga versi terbaru), Office 365, Google Docs, LibreOffice Writer, dan WPS Office.'],
-      ['Apakah ada batasan jumlah halaman atau ukuran file?', 'Tidak ada batasan! Karena diproses langsung menggunakan CPU perangkat Anda (In-Browser), Anda bisa mengonversi file berapapun ukurannya tanpa biaya dan tanpa kuota.'],
-      ['Apakah dokumen saya aman?', 'Sangat aman! Berbeda dengan situs konverter online lain yang mengunggah dokumen Anda ke server asing, Ardan Tools memproses file 100% di peramban (browser) Anda. Data Anda tidak pernah keluar dari komputer atau HP Anda.'],
-      ['Bagaimana cara kerja deteksi paragrafnya?', 'Ardan Tools membaca posisi koordinat (X dan Y) serta ukuran font dari setiap kata dalam PDF, lalu merekonstruksi baris-baris teks menjadi paragraf mengalir dan heading dokumen yang rapi.']
     ]
   },
   {
