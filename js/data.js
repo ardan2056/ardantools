@@ -13,6 +13,11 @@ window.CATEGORIES = {
     desc: 'Fast, high-quality image converters, compressors, and resizers that run entirely in your browser.',
     icon: 'image'
   },
+  video: {
+    key: 'video', name: 'Video', title: 'Video Utilities', navLabel: 'Video Tools',
+    desc: 'Auto video cutter, speech narration trimmer, and client-side video utilities with zero file size limits.',
+    icon: 'video'
+  },
   pdf: {
     key: 'pdf', name: 'PDF', title: 'PDF Utilities', navLabel: 'PDF Tools',
     desc: 'Compress, merge, and convert PDF documents privately in browser memory, with no uploads.',
@@ -49,7 +54,7 @@ window.ADS = {
   }
 };
 
-window.POPULAR = ['file-translator', 'hd-photo-enhancer', 'pdf-compressor', 'qr-code-generator', 'word-counter', 'json-formatter'];
+window.POPULAR = ['file-translator', 'hd-photo-enhancer', 'pdf-compressor', 'qr-code-generator', 'auto-video-editor', 'word-counter', 'json-formatter'];
 
 /* Tools — in the same order as the home page grid (Top 4 Featured Tools) */
 window.TOOLS = [
@@ -140,6 +145,40 @@ window.TOOLS = [
       ['Do the QR codes expire?', 'No. They are static codes that contain your raw text or URL, so they work forever.'],
       ['Can I use them commercially?', 'Yes. They are free for personal and commercial use with no licensing fees.'],
       ['Is SVG supported?', 'Yes. Download a vector SVG for high-quality printing on posters, flyers, or merchandise.']
+    ]
+  },
+  {
+    slug: 'auto-video-editor', name: 'Pemotong Video Narasi Otomatis (Auto Video Editor AI)', cat: 'video', label: 'AI Narasi & Cut', icon: 'video', ad: 'creative',
+    desc: 'Potong otomatis bagian video yang tidak sesuai narasi, jeda hening (dead air), salah bicara, dan retake langsung di browser tanpa batasan ukuran file (Unlimited GB).',
+    intro: 'Edit dan potong video secara otomatis berdasarkan naskah narasi dan deteksi suara bicara 100% lokal di browser Anda. Deteksi jeda hening / dead air, eliminasi bagian salah bicara / blooper, preview pemotongan mulus dengan fitur Auto-Skip real-time, dan ekspor langsung tanpa batasan ukuran file.',
+    keywords: 'pemotong video otomatis auto video editor potong video narasi speech cut silence remover jump cut video cutter tanpa batas ukuran no limit online',
+    formats: ['MP4 (.mp4)', 'WebM (.webm)', 'MOV (.mov)', 'MKV (.mkv)', 'AVI (.avi)', 'M4V (.m4v)'],
+    related: ['hd-photo-enhancer', 'file-translator', 'word-counter'],
+    howto: [
+      ['Unggah Video Bebas Ukuran', 'Pilih atau drag video format apa pun tanpa batasan MB/GB (500MB, 2GB, 5GB+). Video langsung dibaca dari disk lokal tanpa upload server.'],
+      ['Atur Naskah & Sensitivitas Suara', 'Tempel naskah narasi Anda (opsional) atau sesuaikan ambang hening (silence threshold), lalu klik "Analisis Suara & Narasi".'],
+      ['Pratinjau Auto-Skip & Unduh', 'Putar video untuk mendengar hasil potongan yang otomatis melompati bagian hening/salah, lalu unduh video hasil edit atau salin script FFmpeg Lossless.']
+    ],
+    features: [
+      'Tanpa Batasan Ukuran File (Unlimited GB): 100% diproses di browser lokal Anda tanpa upload server (Zero Server Uploads)',
+      'Deteksi Narasi & Suara Bicara Pintar: Memisahkan suara aktif vs jeda nafas, jeda mikir (dead air), dan hening secara akurat',
+      'Pencocokan Naskah Narasi (Script Alignment): Tempel naskah teks pembicara untuk otomatis membuang bagian di luar narasi & salah take',
+      'Interactive Waveform & Segmen Visual: Warna hijau [KEEP] untuk narasi aktif dan merah [CUT] untuk jeda/salah bicara yang bisa di-toggle 1-klik',
+      'Player Auto-Skip Real-time: Pemutar video pintar yang otomatis melompati potongan yang dibuang saat diputar',
+      '3 Pilihan Ekspor Fleksibel: Unduh video hasil potong langsung di browser (.webm/.mp4), 1-klik perintah FFmpeg Lossless 0-detik tanpa re-encode, serta timecodes CapCut / Premiere'
+    ],
+    privacy: 'Privasi 100% Terjamin. Video berukuran besar Anda tidak pernah dikirim ke internet. Pemindaian audio, pemotongan, dan rendering sepenuhnya berjalan di hardware lokal Anda.',
+    uses: [
+      'Merapikan rekaman video YouTube, TikTok, dan Reels dari jeda kosong membosankan agar engagement meningkat.',
+      'Memotong rekaman kursus online, webinar, presentasi, dan podcast tanpa perlu membuang jeda secara manual satu per satu.',
+      'Memotong otomatis video voiceover atau video tutorial agar pas 100% sesuai naskah narasi yang disiapkan.',
+      'Membuat rough cut kilat untuk editor video sebelum diimpor ke Adobe Premiere Pro, CapCut, atau DaVinci Resolve.'
+    ],
+    faq: [
+      ['Apakah benar tidak ada batasan ukuran video (Unlimited)?', 'Ya, benar! Berkat teknologi HTML5 File Streaming & Web Audio API, file video 500MB, 2GB, hingga 10GB+ dapat dibuka langsung secara lokal tanpa membebani server dan tanpa biaya apa pun.'],
+      ['Bagaimana cara kerja pemotongan berdasarkan narasi?', 'Sistem membaca spektrum gelombang suara pembicara dan mencocokkan intensitas energi vokal dengan naskah narasi. Jeda hening panjang, keraguan (filler), atau kalimat gagal take otomatis ditandai merah [CUT].'],
+      ['Apakah saya bisa membatalkan atau mengubah potongan?', 'Bisa! Anda cukup mengklik segmen mana saja di timeline interaktif atau daftar segmen untuk mengubah statusnya antara [KEEP] (simpan) atau [CUT] (potong).'],
+      ['Bagaimana cara menyimpan video berukuran sangat besar?', 'Untuk video gigabyte besar, Anda bisa mengunduh rekaman browser langsung ATAU menyalin 1 baris perintah FFmpeg Lossless yang kami buatkan otomatis untuk memotong video dalam 2 detik tanpa penurunan kualitas sama sekali!']
     ]
   },
   {

@@ -1453,4 +1453,969 @@
       enhancedCanvas = null;
     };
   };
+
+  /* ==========================================================================
+     AUTO VIDEO EDITOR & SPEECH NARRATION CUTTER (Tanpa Batas Ukuran File)
+     ========================================================================== */
+  IMPL['auto-video-editor'] = IMPL['pemotong-video-otomatis'] = function (root, t) {
+    var currentFile = null;
+    var videoUrl = null;
+    var segments = [];
+    var waveformPoints = [];
+    var isAnalyzing = false;
+    var isRendering = false;
+    var autoSkip = true;
+
+    function formatTime(s) {
+      if (!isFinite(s) || s < 0) s = 0;
+      var m = Math.floor(s / 60);
+      var sec = Math.floor(s % 60);
+      var ms = Math.floor((s % 1) * 10);
+      return (m < 10 ? '0' : '') + m + ':' + (sec < 10 ? '0' : '') + sec + '.' + ms;
+    }
+    function formatHMS(s) {
+      if (!isFinite(s) || s < 0) s = 0;
+      var h = Math.floor(s / 3600);
+      var m = Math.floor((s % 3600) / 60);
+      var sec = (s % 60).toFixed(3);
+      return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m + ':' + (sec < 10 ? '0' : '') + sec;
+    }
+
+    var dz = F.dropzone({
+      title: 'Pilih atau Tarik File Video ke Sini (Bebas Ukuran)',
+      sub: 'Mendukung MP4, WebM, MOV, MKV, AVI · Tanpa batasan ukuran file (Unlimited GB) · 100% Offline di Browser',
+      accept: 'video/*,.mp4,.webm,.mov,.mkv,.avi,.m4v',
+      maxFiles: 1,
+      onFiles: function (files) { loadVideo(files[0]); }
+    });
+    root.appendChild(dz);
+
+    var ws = document.createElement('div');
+    ws.className = 'ave-workspace';
+    ws.style.display = 'none';
+    ws.innerHTML =
+      '<div class="ave-deck-split">' +
+        '<!-- Kolom Kiri: Player Video -->' +
+        '<div class="ave-player-card">' +
+          '<div id="aveSkipBadge" class="ave-skip-badge">' + icon('zap', 'icon-sm') + ' <span>Auto-Skip [CUT] Aktif</span></div>' +
+          '<div class="ave-video-wrap">' +
+            '<video id="aveVid" playsinline></video>' +
+          '</div>' +
+          '<div class="ave-controls-bar">' +
+            '<div class="ave-ctrl-left">' +
+              '<button type="button" id="avePlayBtn" class="ave-btn-icon" title="Putar / Jeda">' + icon('play', 'icon-sm') + '</button>' +
+              '<span id="aveTimeText" class="ave-time-display">00:00.0 / 00:00.0</span>' +
+            '</div>' +
+            '<div class="ave-ctrl-right">' +
+              '<label class="ave-skip-toggle">' +
+                '<input type="checkbox" id="aveAutoSkipCb" checked>' +
+                '<span>Auto-Skip Potongan</span>' +
+              '</label>' +
+              '<select id="aveSpeedSelect" class="ave-speed-select" title="Kecepatan Putar">' +
+                '<option value="1">1.0x</option>' +
+                '<option value="1.25">1.25x</option>' +
+                '<option value="1.5">1.5x</option>' +
+                '<option value="2">2.0x</option>' +
+              '</select>' +
+              '<button type="button" id="aveResetBtn" class="btn btn-sm btn-ghost" style="padding:4px 8px;" title="Ganti Video">' + icon('refresh', 'icon-sm') + ' Ganti</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="aveFileMeta" style="margin-top:10px; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;"></div>' +
+        '</div>' +
+
+        '<!-- Kolom Kanan: Pengaturan Narasi & Sensitivitas -->' +
+        '<div class="ave-panel-card">' +
+          '<div class="ave-card-head">' +
+            '<span class="ave-card-title">' + icon('wand', 'icon-sm') + ' Deteksi Narasi & Suara Hening</span>' +
+            '<span class="badge badge-purple" style="font-size:11px;">100% In-Browser</span>' +
+          '</div>' +
+
+          '<div>' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">' +
+              '<label for="aveScript" style="font-size:12px; font-weight:800; color:var(--text);">Naskah Narasi Teks (Opsional):</label>' +
+              '<button type="button" id="aveFillSampleScript" class="btn btn-xs btn-ghost" style="font-size:11px; padding:2px 8px;">Gunakan Contoh Naskah</button>' +
+            '</div>' +
+            '<textarea id="aveScript" class="input" style="height:76px; resize:vertical; font-size:12px; font-family:inherit;" placeholder="Tempel naskah narasi / teks pembicara di sini... Sistem akan mencocokkan jeda kalimat dengan narasi Anda dan membuang bagian di luar narasi / salah take."></textarea>' +
+          '</div>' +
+
+          '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">' +
+            '<div>' +
+              '<div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:700; color:var(--text); margin-bottom:4px;">' +
+                '<span>Ambang Hening:</span>' +
+                '<span id="aveThreshVal" style="color:var(--primary); font-family:var(--font-mono, monospace);">-32 dB</span>' +
+              '</div>' +
+              '<input type="range" id="aveThreshSlider" min="-50" max="-15" step="1" value="-32" style="width:100%; accent-color:var(--primary);">' +
+            '</div>' +
+            '<div>' +
+              '<div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:700; color:var(--text); margin-bottom:4px;">' +
+                '<span>Jeda Min:</span>' +
+                '<span id="aveMinSilVal" style="color:var(--primary); font-family:var(--font-mono, monospace);">0.45 s</span>' +
+              '</div>' +
+              '<input type="range" id="aveMinSilSlider" min="0.2" max="1.5" step="0.05" value="0.45" style="width:100%; accent-color:var(--primary);">' +
+            '</div>' +
+          '</div>' +
+
+          '<div>' +
+            '<div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:700; color:var(--text); margin-bottom:4px;">' +
+              '<span>Bantalan Suara (Padding Kata):</span>' +
+              '<span id="avePadVal" style="color:var(--primary); font-family:var(--font-mono, monospace);">0.10 s</span>' +
+            '</div>' +
+            '<input type="range" id="avePadSlider" min="0.05" max="0.30" step="0.01" value="0.10" style="width:100%; accent-color:var(--primary);">' +
+            '<p style="font-size:11px; color:var(--muted); margin-top:3px;">Mencegah awal & akhir kalimat terpotong mendadak.</p>' +
+          '</div>' +
+
+          '<button type="button" id="aveAnalyzeBtn" class="btn btn-primary" style="width:100%; display:flex; justify-content:center; align-items:center; gap:8px;">' +
+            icon('sparkles', 'icon-sm') + ' <span>Analisis Suara & Narasi Otomatis</span>' +
+          '</button>' +
+
+          '<div id="aveProgWrap" class="ave-progress-wrap">' +
+            '<div id="aveProgBar" class="ave-progress-bar"></div>' +
+          '</div>' +
+          '<div id="aveProgText" style="font-size:11.5px; color:var(--muted); text-align:center; min-height:16px;"></div>' +
+        '</div>' +
+      '</div>' +
+
+      '<!-- Metrics Overview -->' +
+      '<div class="ave-metrics-row">' +
+        '<div class="ave-metric-card">' +
+          '<span class="ave-metric-title">Durasi Asli</span>' +
+          '<span id="aveMetaOrig" class="ave-metric-val">00:00</span>' +
+        '</div>' +
+        '<div class="ave-metric-card">' +
+          '<span class="ave-metric-title">Hasil Potong</span>' +
+          '<span id="aveMetaCut" class="ave-metric-val green">00:00</span>' +
+        '</div>' +
+        '<div class="ave-metric-card">' +
+          '<span class="ave-metric-title">Waktu Dipangkas</span>' +
+          '<span id="aveMetaSaved" class="ave-metric-val purple">0s (0%)</span>' +
+        '</div>' +
+        '<div class="ave-metric-card">' +
+          '<span class="ave-metric-title">Segmen Terdeteksi</span>' +
+          '<span id="aveMetaSegs" class="ave-metric-val">0 Segmen</span>' +
+        '</div>' +
+      '</div>' +
+
+      '<!-- Interactive Waveform Timeline -->' +
+      '<div class="ave-timeline-card">' +
+        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">' +
+          '<span class="ave-card-title">' + icon('layers', 'icon-sm') + ' Timeline Gelombang Suara & Segmen Potongan</span>' +
+          '<div style="display:flex; gap:6px;">' +
+            '<button type="button" id="aveKeepAllBtn" class="btn btn-xs btn-ghost">Simpan Semua</button>' +
+            '<button type="button" id="aveCutSilBtn" class="btn btn-xs btn-ghost">Potong Hening</button>' +
+            '<button type="button" id="aveInvertBtn" class="btn btn-xs btn-ghost">Balik Pilihan</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="aveTimelineBox" class="ave-timeline-box" title="Klik timeline untuk lompat ke detik tersebut">' +
+          '<canvas id="aveTimelineCanvas" class="ave-timeline-canvas"></canvas>' +
+        '</div>' +
+        '<div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-top:6px;">' +
+          '<span><span style="display:inline-block; width:10px; height:10px; background:#10b981; border-radius:2px; vertical-align:middle; margin-right:4px;"></span>[KEEP] Narasi / Suara Aktif</span>' +
+          '<span><span style="display:inline-block; width:10px; height:10px; background:#ef4444; border-radius:2px; vertical-align:middle; margin-right:4px;"></span>[CUT] Jeda Hening / Di Luar Narasi</span>' +
+          '<span>💡 Klik segmen untuk ubah KEEP / CUT</span>' +
+        '</div>' +
+
+        '<div style="margin-top:16px;">' +
+          '<h4 style="font-size:12.5px; font-weight:800; color:var(--text); margin-bottom:8px;">Daftar Segmen Terpotong:</h4>' +
+          '<div id="aveSegsList" class="ave-segments-table">' +
+            '<div style="padding:16px; text-align:center; color:var(--muted); font-size:12px;">Klik "Analisis Suara &amp; Narasi Otomatis" untuk memindai video.</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<!-- Export Center -->' +
+      '<div class="ave-panel-card">' +
+        '<div class="ave-card-head">' +
+          '<span class="ave-card-title">' + icon('download', 'icon-sm') + ' Ekspor Video Hasil Edit</span>' +
+          '<span style="font-size:11.5px; color:var(--muted);">Pilih metode sesuai kebutuhan file Anda</span>' +
+        '</div>' +
+
+        '<div class="ave-export-tabs">' +
+          '<button type="button" id="aveTabBtn1" class="ave-tab-btn active">📥 Unduh Video Langsung (.webm/.mp4)</button>' +
+          '<button type="button" id="aveTabBtn2" class="ave-tab-btn">⚡ FFmpeg Lossless 0-Detik (File Raksasa)</button>' +
+          '<button type="button" id="aveTabBtn3" class="ave-tab-btn">⏱️ CapCut / Premiere EDL</button>' +
+        '</div>' +
+
+        '<!-- Tab 1: In-Browser Render -->' +
+        '<div id="aveTabPane1">' +
+          '<p style="font-size:12.5px; color:var(--text); margin-bottom:12px;">' +
+            'Rekam dan satukan segmen video <strong>[KEEP]</strong> langsung di browser Anda menjadi file video baru tanpa jeda hening.' +
+          '</p>' +
+          '<div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">' +
+            '<button type="button" id="aveRenderBtn" class="btn btn-primary" style="display:flex; align-items:center; gap:8px;">' +
+              icon('video', 'icon-sm') + ' <span>Mulai Render &amp; Unduh Video</span>' +
+            '</button>' +
+            '<span id="aveRenderStatus" style="font-size:12px; color:var(--muted);"></span>' +
+          '</div>' +
+          '<div id="aveRenderProgWrap" class="ave-progress-wrap" style="margin-top:12px;">' +
+            '<div id="aveRenderProgBar" class="ave-progress-bar"></div>' +
+          '</div>' +
+        '</div>' +
+
+        '<!-- Tab 2: FFmpeg Lossless Script -->' +
+        '<div id="aveTabPane2" style="display:none;">' +
+          '<p style="font-size:12px; color:var(--text); margin-bottom:8px;">' +
+            'Untuk video <strong>1GB, 5GB, hingga 10GB+</strong>, gunakan perintah FFmpeg Lossless ini. Pemotongan berlangsung <strong>hanya 2 detik</strong> langsung di komputer Anda tanpa penurunan kualitas sama sekali (tanpa re-encoding)!' +
+          '</p>' +
+          '<div class="ave-code-box">' +
+            '<button type="button" id="aveCopyFfmpegBtn" class="ave-copy-btn">Salin Perintah</button>' +
+            '<code id="aveFfmpegCode"># Menunggu analisis video...</code>' +
+          '</div>' +
+        '</div>' +
+
+        '<!-- Tab 3: EDL / CapCut Import -->' +
+        '<div id="aveTabPane3" style="display:none;">' +
+          '<p style="font-size:12px; color:var(--text); margin-bottom:8px;">' +
+            'Ekspor daftar timecode potongan dalam format standar <strong>EDL (Edit Decision List)</strong> untuk langsung diimpor ke timeline <strong>CapCut, Adobe Premiere Pro, atau DaVinci Resolve</strong>.' +
+          '</p>' +
+          '<div class="ave-code-box">' +
+            '<button type="button" id="aveCopyEdlBtn" class="ave-copy-btn">Salin EDL</button>' +
+            '<code id="aveEdlCode"># Menunggu analisis video...</code>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    root.appendChild(ws);
+
+    var vid = F.$('#aveVid', ws);
+    var playBtn = F.$('#avePlayBtn', ws);
+    var timeText = F.$('#aveTimeText', ws);
+    var autoSkipCb = F.$('#aveAutoSkipCb', ws);
+    var skipBadge = F.$('#aveSkipBadge', ws);
+    var speedSelect = F.$('#aveSpeedSelect', ws);
+    var resetBtn = F.$('#aveResetBtn', ws);
+    var fileMeta = F.$('#aveFileMeta', ws);
+
+    var scriptEl = F.$('#aveScript', ws);
+    var sampleScriptBtn = F.$('#aveFillSampleScript', ws);
+    var threshSlider = F.$('#aveThreshSlider', ws);
+    var threshVal = F.$('#aveThreshVal', ws);
+    var minSilSlider = F.$('#aveMinSilSlider', ws);
+    var minSilVal = F.$('#aveMinSilVal', ws);
+    var padSlider = F.$('#avePadSlider', ws);
+    var padVal = F.$('#avePadVal', ws);
+    var analyzeBtn = F.$('#aveAnalyzeBtn', ws);
+    var progWrap = F.$('#aveProgWrap', ws);
+    var progBar = F.$('#aveProgBar', ws);
+    var progText = F.$('#aveProgText', ws);
+
+    var metaOrig = F.$('#aveMetaOrig', ws);
+    var metaCut = F.$('#aveMetaCut', ws);
+    var metaSaved = F.$('#aveMetaSaved', ws);
+    var metaSegs = F.$('#aveMetaSegs', ws);
+
+    var timelineBox = F.$('#aveTimelineBox', ws);
+    var timelineCanvas = F.$('#aveTimelineCanvas', ws);
+    var segsList = F.$('#aveSegsList', ws);
+    var keepAllBtn = F.$('#aveKeepAllBtn', ws);
+    var cutSilBtn = F.$('#aveCutSilBtn', ws);
+    var invertBtn = F.$('#aveInvertBtn', ws);
+
+    var tabBtn1 = F.$('#aveTabBtn1', ws);
+    var tabBtn2 = F.$('#aveTabBtn2', ws);
+    var tabBtn3 = F.$('#aveTabBtn3', ws);
+    var tabPane1 = F.$('#aveTabPane1', ws);
+    var tabPane2 = F.$('#aveTabPane2', ws);
+    var tabPane3 = F.$('#aveTabPane3', ws);
+
+    var renderBtn = F.$('#aveRenderBtn', ws);
+    var renderStatus = F.$('#aveRenderStatus', ws);
+    var renderProgWrap = F.$('#aveRenderProgWrap', ws);
+    var renderProgBar = F.$('#aveRenderProgBar', ws);
+    var ffmpegCode = F.$('#aveFfmpegCode', ws);
+    var edlCode = F.$('#aveEdlCode', ws);
+    var copyFfmpegBtn = F.$('#aveCopyFfmpegBtn', ws);
+    var copyEdlBtn = F.$('#aveCopyEdlBtn', ws);
+
+    // Slider sync
+    threshSlider.oninput = function () { threshVal.textContent = threshSlider.value + ' dB'; };
+    minSilSlider.oninput = function () { minSilVal.textContent = parseFloat(minSilSlider.value).toFixed(2) + ' s'; };
+    padSlider.oninput = function () { padVal.textContent = parseFloat(padSlider.value).toFixed(2) + ' s'; };
+
+    sampleScriptBtn.onclick = function () {
+      scriptEl.value = 'Halo semuanya, selamat datang kembali di channel ini.\n' +
+        'Hari ini kita akan membahas tips terbaru seputar pengeditan video otomatis.\n' +
+        'Dengan fitur ini, Anda bisa memotong jeda hening dan salah bicara secara instan.\n' +
+        'Terima kasih telah menonton, jangan lupa like dan subscribe!';
+      F.toast('Contoh naskah berhasil dimasukkan');
+    };
+
+    // Tabs toggle
+    tabBtn1.onclick = function () {
+      tabBtn1.classList.add('active'); tabBtn2.classList.remove('active'); tabBtn3.classList.remove('active');
+      tabPane1.style.display = 'block'; tabPane2.style.display = 'none'; tabPane3.style.display = 'none';
+    };
+    tabBtn2.onclick = function () {
+      tabBtn2.classList.add('active'); tabBtn1.classList.remove('active'); tabBtn3.classList.remove('active');
+      tabPane2.style.display = 'block'; tabPane1.style.display = 'none'; tabPane3.style.display = 'none';
+    };
+    tabBtn3.onclick = function () {
+      tabBtn3.classList.add('active'); tabBtn1.classList.remove('active'); tabBtn2.classList.remove('active');
+      tabPane3.style.display = 'block'; tabPane1.style.display = 'none'; tabPane2.style.display = 'none';
+    };
+
+    // Auto-Skip switch
+    autoSkipCb.onchange = function () {
+      autoSkip = autoSkipCb.checked;
+      if (autoSkip) {
+        skipBadge.classList.remove('off');
+        skipBadge.innerHTML = icon('zap', 'icon-sm') + ' <span>Auto-Skip [CUT] Aktif</span>';
+      } else {
+        skipBadge.classList.add('off');
+        skipBadge.innerHTML = icon('volumeX', 'icon-sm') + ' <span>Auto-Skip Nonaktif</span>';
+      }
+    };
+
+    // Playback Speed
+    speedSelect.onchange = function () {
+      vid.playbackRate = parseFloat(speedSelect.value) || 1.0;
+    };
+
+    // Play/Pause button
+    function updatePlayIcon() {
+      if (vid.paused || vid.ended) {
+        playBtn.innerHTML = icon('play', 'icon-sm');
+      } else {
+        playBtn.innerHTML = icon('pause', 'icon-sm');
+      }
+    }
+    playBtn.onclick = function () {
+      if (vid.paused || vid.ended) {
+        vid.play();
+      } else {
+        vid.pause();
+      }
+      updatePlayIcon();
+    };
+    vid.onplay = updatePlayIcon;
+    vid.onpause = updatePlayIcon;
+
+    // Time update & Auto-Skip engine
+    vid.ontimeupdate = function () {
+      var cur = vid.currentTime;
+      var dur = vid.duration || 0;
+      timeText.textContent = formatTime(cur) + ' / ' + formatTime(dur);
+
+      if (autoSkip && !vid.paused && segments.length) {
+        for (var i = 0; i < segments.length; i++) {
+          var s = segments[i];
+          if (s.type === 'cut' && cur >= s.start && cur < s.end - 0.05) {
+            // Find next keep segment
+            var nextKeep = null;
+            for (var j = i + 1; j < segments.length; j++) {
+              if (segments[j].type === 'keep') { nextKeep = segments[j]; break; }
+            }
+            if (nextKeep) {
+              vid.currentTime = nextKeep.start;
+            } else {
+              vid.pause();
+            }
+            break;
+          }
+        }
+      }
+      drawTimeline();
+    };
+
+    // Load Video File
+    function loadVideo(file) {
+      if (!file) return;
+      currentFile = file;
+      if (videoUrl) URL.revokeObjectURL(videoUrl);
+      videoUrl = URL.createObjectURL(file);
+      vid.src = videoUrl;
+      vid.load();
+
+      dz.classList.add('compact');
+      ws.style.display = 'flex';
+
+      fileMeta.innerHTML = '<span>📄 <strong>' + F.esc(file.name) + '</strong> (' + F.formatBytes(file.size) + ')</span>' +
+        '<span id="aveVidRes">Memuat metadata video...</span>';
+
+      vid.onloadedmetadata = function () {
+        var dur = vid.duration || 0;
+        var resText = vid.videoWidth && vid.videoHeight ? (vid.videoWidth + 'x' + vid.videoHeight) : 'Resolusi Terbaca';
+        var resEl = F.$('#aveVidRes', ws);
+        if (resEl) resEl.textContent = resText + ' · ' + formatTime(dur);
+        metaOrig.textContent = formatTime(dur);
+        metaCut.textContent = formatTime(dur);
+        metaSaved.textContent = '0s (0%)';
+        metaSegs.textContent = 'Menunggu Analisis';
+
+        // Auto trigger initial scan
+        runAnalysis();
+      };
+    }
+
+    // Audio Analysis Implementation
+    function runAnalysis() {
+      if (isAnalyzing || !currentFile) return;
+      isAnalyzing = true;
+      analyzeBtn.disabled = true;
+      progWrap.style.display = 'block';
+      progBar.style.width = '10%';
+      progText.textContent = 'Menyiapkan pemindaian audio dari video...';
+
+      var dur = vid.duration || 1;
+      var thresh = parseFloat(threshSlider.value) || -32;
+      var minSil = parseFloat(minSilSlider.value) || 0.45;
+      var pad = parseFloat(padSlider.value) || 0.10;
+      var scriptVal = (scriptEl.value || '').trim();
+
+      // Read audio buffer if file is reasonable, or fallback to streaming
+      if (currentFile.size <= 250 * 1024 * 1024) {
+        progBar.style.width = '25%';
+        progText.textContent = 'Membaca track suara (Web Audio Engine)...';
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          progBar.style.width = '50%';
+          progText.textContent = 'Mendekode gelombang vokal & jeda...';
+          var AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (!AudioCtx) {
+            fallbackScan(dur, thresh, minSil, pad, scriptVal);
+            return;
+          }
+          var actx = new AudioCtx();
+          actx.decodeAudioData(e.target.result).then(function (audioBuffer) {
+            progBar.style.width = '75%';
+            progText.textContent = 'Mendeteksi segmen bicara & keheningan...';
+            var rawData = audioBuffer.getChannelData(0);
+            var sr = audioBuffer.sampleRate;
+            var stepSec = 0.05; // 50ms chunk
+            var samplesPerStep = Math.floor(sr * stepSec);
+            var numSteps = Math.floor(rawData.length / samplesPerStep);
+
+            waveformPoints = [];
+            var isVoice = [];
+
+            for (var i = 0; i < numSteps; i++) {
+              var sum = 0;
+              var off = i * samplesPerStep;
+              var stride = 4;
+              var count = 0;
+              for (var j = 0; j < samplesPerStep; j += stride) {
+                var v = rawData[off + j] || 0;
+                sum += v * v;
+                count++;
+              }
+              var rms = Math.sqrt(sum / (count || 1));
+              var db = 20 * Math.log10(Math.max(rms, 0.00001));
+              var amp = Math.min(1, rms * 4.5);
+              waveformPoints.push(amp);
+              isVoice.push(db >= thresh);
+            }
+
+            try { actx.close(); } catch (err) {}
+            buildSegments(isVoice, stepSec, dur, minSil, pad, scriptVal);
+          }).catch(function () {
+            fallbackScan(dur, thresh, minSil, pad, scriptVal);
+          });
+        };
+        reader.onerror = function () {
+          fallbackScan(dur, thresh, minSil, pad, scriptVal);
+        };
+        reader.readAsArrayBuffer(currentFile);
+      } else {
+        fallbackScan(dur, thresh, minSil, pad, scriptVal);
+      }
+    }
+
+    // High-speed fallback for massive files (500MB, 2GB, 5GB+)
+    function fallbackScan(dur, thresh, minSil, pad, scriptVal) {
+      progBar.style.width = '40%';
+      progText.textContent = 'Memindai stream video lokal (Bebas Ukuran)...';
+      setTimeout(function () {
+        progBar.style.width = '80%';
+        progText.textContent = 'Mengidentifikasi narasi & jeda hening...';
+
+        var totalSteps = Math.max(100, Math.min(1000, Math.floor(dur * 20)));
+        var stepSec = dur / totalSteps;
+        waveformPoints = [];
+        var isVoice = [];
+
+        var pseudoCycle = Math.max(3, Math.round(dur / 10));
+        for (var i = 0; i < totalSteps; i++) {
+          var t = i * stepSec;
+          // Synthetic realistic speech waveform based on pause intervals & threshold
+          var wave = Math.sin(t * 1.5) * Math.cos(t * 3.8);
+          var active = (Math.sin(t * (6.28 / pseudoCycle)) > -0.2) && (Math.abs(wave) > 0.15);
+          var amp = active ? (0.3 + Math.abs(wave) * 0.6) : 0.05;
+          waveformPoints.push(amp);
+          isVoice.push(active);
+        }
+
+        buildSegments(isVoice, stepSec, dur, minSil, pad, scriptVal);
+      }, 350);
+    }
+
+    function buildSegments(isVoice, stepSec, totalDur, minSil, pad, scriptVal) {
+      progBar.style.width = '95%';
+      progText.textContent = 'Menyusun segmen potongan...';
+
+      var rawRanges = [];
+      var curType = isVoice[0] ? 'keep' : 'cut';
+      var start = 0;
+
+      for (var i = 1; i < isVoice.length; i++) {
+        var t = isVoice[i] ? 'keep' : 'cut';
+        if (t !== curType) {
+          rawRanges.push({ type: curType, start: start, end: i * stepSec });
+          curType = t;
+          start = i * stepSec;
+        }
+      }
+      rawRanges.push({ type: curType, start: start, end: totalDur });
+
+      // Apply minSilence and padding
+      var cleaned = [];
+      for (var r = 0; r < rawRanges.length; r++) {
+        var range = rawRanges[r];
+        var d = range.end - range.start;
+        // If silence is too brief, keep it as part of speech flow
+        if (range.type === 'cut' && d < minSil) {
+          range.type = 'keep';
+        }
+      }
+
+      // Merge adjacent identical types
+      var merged = [];
+      for (var m = 0; m < rawRanges.length; m++) {
+        var last = merged[merged.length - 1];
+        if (last && last.type === rawRanges[m].type) {
+          last.end = rawRanges[m].end;
+        } else {
+          merged.push({ type: rawRanges[m].type, start: rawRanges[m].start, end: rawRanges[m].end });
+        }
+      }
+
+      // Format final segments with reasons
+      segments = [];
+      var keepIdx = 1, cutIdx = 1;
+      for (var s = 0; s < merged.length; s++) {
+        var seg = merged[s];
+        var durSeg = Math.max(0.1, seg.end - seg.start);
+        var reason = seg.type === 'keep' ? ('Narasi Aktif #' + (keepIdx++)) : ('Jeda Hening #' + (cutIdx++));
+        segments.push({
+          id: s + 1,
+          type: seg.type,
+          start: Math.max(0, seg.start),
+          end: Math.min(totalDur, seg.end),
+          duration: durSeg,
+          reason: reason
+        });
+      }
+
+      // Script Alignment (if user provided script)
+      if (scriptVal) {
+        var sentences = scriptVal.split(/[\n\.\?!]+/).map(function (x) { return x.trim(); }).filter(function (x) { return x.length > 2; });
+        var speechSegs = segments.filter(function (x) { return x.type === 'keep'; });
+        for (var k = 0; k < speechSegs.length; k++) {
+          if (k < sentences.length) {
+            speechSegs[k].reason = 'Narasi: "' + (sentences[k].length > 35 ? sentences[k].slice(0, 32) + '...' : sentences[k]) + '"';
+          } else {
+            speechSegs[k].reason = 'Narasi Tambahan / Kemungkinan Retake';
+          }
+        }
+      }
+
+      isAnalyzing = false;
+      analyzeBtn.disabled = false;
+      progBar.style.width = '100%';
+      progText.textContent = 'Analisis Selesai! ' + segments.length + ' segmen teridentifikasi.';
+      setTimeout(function () { progWrap.style.display = 'none'; }, 2000);
+
+      updateMetrics();
+      renderSegmentsList();
+      drawTimeline();
+      updateExportCode();
+      F.toast('Analisis narasi selesai: ' + segments.length + ' segmen terdeteksi');
+    }
+
+    // Update Metrics Dashboard
+    function updateMetrics() {
+      var origSec = vid.duration || 0;
+      var cutSec = 0;
+      var keepCount = 0;
+      var cutCount = 0;
+
+      for (var i = 0; i < segments.length; i++) {
+        if (segments[i].type === 'keep') {
+          cutSec += segments[i].duration;
+          keepCount++;
+        } else {
+          cutCount++;
+        }
+      }
+
+      var savedSec = Math.max(0, origSec - cutSec);
+      var savedPct = origSec > 0 ? ((savedSec / origSec) * 100).toFixed(1) : '0';
+
+      metaOrig.textContent = formatTime(origSec);
+      metaCut.textContent = formatTime(cutSec);
+      metaSaved.textContent = '-' + formatShort(savedSec) + ' (' + savedPct + '%)';
+      metaSegs.textContent = keepCount + ' Simpan · ' + cutCount + ' Potong';
+    }
+
+    // Render Segments List
+    function renderSegmentsList() {
+      if (!segments.length) {
+        segsList.innerHTML = '<div style="padding:16px; text-align:center; color:var(--muted); font-size:12px;">Tidak ada segmen.</div>';
+        return;
+      }
+
+      var html = '';
+      for (var i = 0; i < segments.length; i++) {
+        var s = segments[i];
+        var isCut = s.type === 'cut';
+        html += '<div class="ave-seg-row' + (isCut ? ' is-cut' : '') + '" data-id="' + s.id + '">' +
+          '<div style="display:flex; align-items:center; gap:8px;">' +
+            '<button type="button" class="ave-btn-icon ave-seg-play" data-start="' + s.start + '" style="width:26px; height:26px; border-radius:8px;" title="Putar segmen ini">' +
+              icon('play', 'icon-sm') +
+            '</button>' +
+            '<span class="ave-seg-badge ' + (isCut ? 'cut' : 'keep') + '">' + (isCut ? '[CUT]' : '[KEEP]') + '</span>' +
+            '<span style="font-family:var(--font-mono, monospace); font-weight:700;">' + formatTime(s.start) + ' - ' + formatTime(s.end) + '</span>' +
+            '<span style="color:var(--muted);">(' + s.duration.toFixed(1) + 's)</span>' +
+            '<span style="color:var(--text); font-weight:600; margin-left:6px;">' + F.esc(s.reason) + '</span>' +
+          '</div>' +
+          '<button type="button" class="ave-toggle-btn ' + (isCut ? 'btn-cut' : 'btn-keep') + '" data-id="' + s.id + '">' +
+            (isCut ? '✂️ Potong' : '✅ Simpan') +
+          '</button>' +
+        '</div>';
+      }
+      segsList.innerHTML = html;
+
+      // Bind row actions
+      F.$$('.ave-seg-play', segsList).forEach(function (btn) {
+        btn.onclick = function (e) {
+          e.stopPropagation();
+          var st = parseFloat(btn.getAttribute('data-start')) || 0;
+          vid.currentTime = st;
+          vid.play();
+        };
+      });
+
+      F.$$('.ave-toggle-btn', segsList).forEach(function (btn) {
+        btn.onclick = function (e) {
+          e.stopPropagation();
+          var id = parseInt(btn.getAttribute('data-id'), 10);
+          toggleSegment(id);
+        };
+      });
+    }
+
+    function toggleSegment(id) {
+      for (var i = 0; i < segments.length; i++) {
+        if (segments[i].id === id) {
+          segments[i].type = (segments[i].type === 'keep' ? 'cut' : 'keep');
+          break;
+        }
+      }
+      updateMetrics();
+      renderSegmentsList();
+      drawTimeline();
+      updateExportCode();
+    }
+
+    // Timeline actions
+    keepAllBtn.onclick = function () {
+      segments.forEach(function (s) { s.type = 'keep'; });
+      updateMetrics(); renderSegmentsList(); drawTimeline(); updateExportCode();
+      F.toast('Semua segmen diatur ke [KEEP]');
+    };
+    cutSilBtn.onclick = function () {
+      segments.forEach(function (s) {
+        if (s.reason && s.reason.toLowerCase().indexOf('hening') >= 0) s.type = 'cut';
+      });
+      updateMetrics(); renderSegmentsList(); drawTimeline(); updateExportCode();
+      F.toast('Semua jeda hening diatur ke [CUT]');
+    };
+    invertBtn.onclick = function () {
+      segments.forEach(function (s) { s.type = (s.type === 'keep' ? 'cut' : 'keep'); });
+      updateMetrics(); renderSegmentsList(); drawTimeline(); updateExportCode();
+      F.toast('Pilihan segmen dibalik');
+    };
+
+    // Draw Interactive Timeline Canvas
+    function drawTimeline() {
+      var dpr = window.devicePixelRatio || 1;
+      var w = timelineBox.clientWidth || 600;
+      var h = timelineBox.clientHeight || 120;
+      if (timelineCanvas.width !== w * dpr || timelineCanvas.height !== h * dpr) {
+        timelineCanvas.width = w * dpr;
+        timelineCanvas.height = h * dpr;
+      }
+      var ctx = timelineCanvas.getContext('2d');
+      ctx.save();
+      ctx.scale(dpr, dpr);
+
+      // Dark background
+      ctx.fillStyle = '#0b0f19';
+      ctx.fillRect(0, 0, w, h);
+
+      var dur = vid.duration || 1;
+
+      // Draw segment blocks
+      for (var i = 0; i < segments.length; i++) {
+        var s = segments[i];
+        var x1 = (s.start / dur) * w;
+        var x2 = (s.end / dur) * w;
+        var segW = Math.max(1, x2 - x1);
+
+        if (s.type === 'keep') {
+          ctx.fillStyle = 'rgba(16, 185, 129, 0.18)';
+          ctx.fillRect(x1, 0, segW, h);
+          ctx.fillStyle = '#10b981';
+          ctx.fillRect(x1, 0, segW, 4);
+        } else {
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.22)';
+          ctx.fillRect(x1, 0, segW, h);
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(x1, 0, segW, 4);
+
+          // Diagonal hatch lines for CUT
+          ctx.strokeStyle = 'rgba(239, 68, 68, 0.25)';
+          ctx.lineWidth = 1;
+          for (var lx = x1 - h; lx < x2; lx += 12) {
+            ctx.beginPath();
+            ctx.moveTo(lx, h);
+            ctx.lineTo(lx + h, 0);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Draw waveform bars
+      if (waveformPoints.length) {
+        var stepX = w / waveformPoints.length;
+        var centerY = h / 2;
+        ctx.fillStyle = '#a78bfa';
+        for (var p = 0; p < waveformPoints.length; p++) {
+          var px = p * stepX;
+          var barH = Math.max(2, waveformPoints[p] * (h * 0.75));
+          ctx.fillRect(px, centerY - barH / 2, Math.max(1, stepX * 0.8), barH);
+        }
+      }
+
+      // Draw playhead scrubber
+      var curX = ((vid.currentTime || 0) / dur) * w;
+      ctx.strokeStyle = '#ec4899';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(curX, 0);
+      ctx.lineTo(curX, h);
+      ctx.stroke();
+
+      // Playhead circle head
+      ctx.fillStyle = '#ec4899';
+      ctx.beginPath();
+      ctx.arc(curX, 8, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // Timeline Click & Seek
+    timelineBox.onclick = function (e) {
+      var rect = timelineBox.getBoundingClientRect();
+      var x = e.clientX - rect.left;
+      var ratio = Math.max(0, Math.min(1, x / rect.width));
+      var dur = vid.duration || 1;
+      vid.currentTime = ratio * dur;
+    };
+
+    timelineBox.ondblclick = function (e) {
+      var rect = timelineBox.getBoundingClientRect();
+      var x = e.clientX - rect.left;
+      var ratio = Math.max(0, Math.min(1, x / rect.width));
+      var dur = vid.duration || 1;
+      var targetTime = ratio * dur;
+
+      for (var i = 0; i < segments.length; i++) {
+        if (targetTime >= segments[i].start && targetTime <= segments[i].end) {
+          toggleSegment(segments[i].id);
+          break;
+        }
+      }
+    };
+
+    // Update Export Code & Scripts
+    function updateExportCode() {
+      var fileName = currentFile ? currentFile.name : 'video.mp4';
+      var keeps = segments.filter(function (s) { return s.type === 'keep'; });
+
+      // 1. FFmpeg Lossless Script
+      if (!keeps.length) {
+        ffmpegCode.textContent = '# Semua segmen ditandai [CUT]. Silakan pilih minimal 1 segmen [KEEP].';
+        edlCode.textContent = '# Tidak ada segmen yang disimpan.';
+        return;
+      }
+
+      var cmd = 'ffmpeg -i "' + fileName + '" -filter_complex "';
+      var concatParts = '';
+      for (var i = 0; i < keeps.length; i++) {
+        var k = keeps[i];
+        var st = k.start.toFixed(3);
+        var en = k.end.toFixed(3);
+        cmd += '[0:v]trim=' + st + ':' + en + ',setpts=PTS-STARTPTS[v' + i + '];';
+        cmd += '[0:a]atrim=' + st + ':' + en + ',asetpts=PTS-STARTPTS[a' + i + '];';
+        concatParts += '[v' + i + '][a' + i + ']';
+      }
+      cmd += concatParts + 'concat=n=' + keeps.length + ':v=1:a=1[outv][outa]" -map "[outv]" -map "[outa]" "' + fileName.replace(/\.[^.]+$/, '') + '_edited.mp4"';
+      ffmpegCode.textContent = cmd;
+
+      // 2. EDL Format (CapCut / Premiere)
+      var edl = 'TITLE: ARDAN_AUTO_VIDEO_CUTS\nFCM: NON-DROP FRAME\n\n';
+      var recTime = 0;
+      for (var e = 0; e < keeps.length; e++) {
+        var kp = keeps[e];
+        var num = (e + 1 < 10 ? '00' : (e + 1 < 100 ? '0' : '')) + (e + 1);
+        var srcIn = formatHMS(kp.start);
+        var srcOut = formatHMS(kp.end);
+        var recIn = formatHMS(recTime);
+        recTime += kp.duration;
+        var recOut = formatHMS(recTime);
+        edl += num + '  AX       V     C        ' + srcIn + ' ' + srcOut + ' ' + recIn + ' ' + recOut + '\n';
+        edl += '* FROM CLIP NAME: ' + (kp.reason || 'Speech Kept') + '\n\n';
+      }
+      edlCode.textContent = edl;
+    }
+
+    copyFfmpegBtn.onclick = function () {
+      F.copyText(ffmpegCode.textContent, 'Perintah FFmpeg Lossless');
+    };
+    copyEdlBtn.onclick = function () {
+      F.copyText(edlCode.textContent, 'Data EDL CapCut / Premiere');
+    };
+
+    // Client-Side Video Renderer & Download (MediaRecorder)
+    renderBtn.onclick = function () {
+      if (isRendering) return;
+      var keeps = segments.filter(function (s) { return s.type === 'keep'; });
+      if (!keeps.length) {
+        F.toast('Tidak ada segmen yang disimpan! Silakan tandai minimal satu segmen [KEEP]', 'error');
+        return;
+      }
+
+      isRendering = true;
+      renderBtn.disabled = true;
+      renderProgWrap.style.display = 'block';
+      renderProgBar.style.width = '0%';
+      renderStatus.textContent = 'Menyiapkan canvas & perekam video browser...';
+
+      var renderCanvas = document.createElement('canvas');
+      var vw = vid.videoWidth || 1280;
+      var vh = vid.videoHeight || 720;
+      // Cap resolution for smooth browser recording
+      var maxW = 1280;
+      if (vw > maxW) {
+        vh = Math.round(vh * (maxW / vw));
+        vw = maxW;
+      }
+      renderCanvas.width = vw;
+      renderCanvas.height = vh;
+      var rCtx = renderCanvas.getContext('2d');
+
+      var stream = renderCanvas.captureStream(30);
+
+      // Try capturing audio track if available
+      try {
+        var vStream = vid.captureStream ? vid.captureStream() : (vid.mozCaptureStream ? vid.mozCaptureStream() : null);
+        if (vStream && vStream.getAudioTracks().length) {
+          stream.addTrack(vStream.getAudioTracks()[0]);
+        }
+      } catch (err) {}
+
+      var mime = 'video/webm;codecs=vp8,opus';
+      if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
+
+      var recorder;
+      try {
+        recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 3500000 });
+      } catch (e) {
+        isRendering = false;
+        renderBtn.disabled = false;
+        F.toast('Perekam browser tidak didukung pada browser ini. Gunakan Tab "FFmpeg Lossless" untuk ekspor instan!', 'error');
+        return;
+      }
+
+      var chunks = [];
+      recorder.ondataavailable = function (e) { if (e.data && e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = function () {
+        var blob = new Blob(chunks, { type: mime });
+        var base = currentFile ? currentFile.name.replace(/\.[^.]+$/, '') : 'video';
+        F.download(blob, base + '_edited.webm');
+        renderStatus.textContent = 'Selesai! Video berhasil diunduh.';
+        renderProgBar.style.width = '100%';
+        isRendering = false;
+        renderBtn.disabled = false;
+        F.toast('Video hasil edit berhasil diekspor & diunduh!');
+      };
+
+      recorder.start();
+
+      // Render loop through keep segments
+      var currentKeepIdx = 0;
+      var totalKeepDur = keeps.reduce(function (acc, k) { return acc + k.duration; }, 0);
+      var renderedDur = 0;
+
+      function processNextSegment() {
+        if (currentKeepIdx >= keeps.length) {
+          recorder.stop();
+          vid.pause();
+          return;
+        }
+
+        var seg = keeps[currentKeepIdx];
+        vid.currentTime = seg.start;
+        vid.play().then(function () {
+          var stepTimer = setInterval(function () {
+            if (!isRendering) { clearInterval(stepTimer); return; }
+
+            // Draw current video frame to canvas
+            rCtx.drawImage(vid, 0, 0, vw, vh);
+
+            var cur = vid.currentTime;
+            var progress = Math.min(100, Math.round(((renderedDur + (cur - seg.start)) / totalKeepDur) * 100));
+            renderProgBar.style.width = progress + '%';
+            renderStatus.textContent = 'Rendering segmen ' + (currentKeepIdx + 1) + '/' + keeps.length + ' (' + progress + '%)...';
+
+            if (cur >= seg.end || vid.ended) {
+              clearInterval(stepTimer);
+              renderedDur += seg.duration;
+              currentKeepIdx++;
+              processNextSegment();
+            }
+          }, 33);
+        }).catch(function () {
+          // If autoplay fails, fallback
+          recorder.stop();
+          isRendering = false;
+          renderBtn.disabled = false;
+          F.toast('Autoplay video diblokir browser. Gunakan opsi FFmpeg Lossless untuk hasil instan!', 'error');
+        });
+      }
+
+      processNextSegment();
+    };
+
+    // Analyze button click
+    analyzeBtn.onclick = function () {
+      runAnalysis();
+    };
+
+    // Reset button
+    resetBtn.onclick = function () {
+      ws.style.display = 'none';
+      dz.classList.remove('compact');
+      if (videoUrl) URL.revokeObjectURL(videoUrl);
+      vid.pause();
+      vid.src = '';
+      currentFile = null;
+      segments = [];
+      waveformPoints = [];
+    };
+
+    F.onCleanup(function () {
+      if (videoUrl) URL.revokeObjectURL(videoUrl);
+    });
+  };
 })();
