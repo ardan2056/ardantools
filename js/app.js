@@ -161,7 +161,8 @@
       return LIB._pdfjs;
     },
     heic: function () {
-      return loadScript('https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js')
+      return loadScript(asset('vendor/heic2any.min.js'))
+        .catch(function () { return loadScript('https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js'); })
         .catch(function () { return loadScript('https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js'); })
         .then(function () { return window.heic2any; });
     }
@@ -246,6 +247,7 @@
     return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
   }
   function setTheme(t) {
+    document.documentElement.classList.add('theme-transitioning');
     if (t === 'dark') {
       document.documentElement.setAttribute('data-theme', 'dark');
       try { localStorage.setItem('ardan_theme', 'dark'); } catch (e) {}
@@ -253,9 +255,27 @@
       document.documentElement.removeAttribute('data-theme');
       try { localStorage.setItem('ardan_theme', 'light'); } catch (e) {}
     }
-    $$('#themeToggleBtn, #themeToggleBtnMob').forEach(function (btn) {
-      btn.innerHTML = icon(t === 'dark' ? 'sun' : 'moon');
-    });
+
+    var metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+      metaTheme.setAttribute('content', t === 'dark' ? '#090e1a' : '#7c3aed');
+    }
+
+    var deskBtn = document.getElementById('themeToggleBtn');
+    if (deskBtn) {
+      deskBtn.innerHTML = icon(t === 'dark' ? 'sun' : 'moon');
+      deskBtn.title = t === 'dark' ? 'Ganti ke Mode Terang' : 'Ganti ke Mode Gelap';
+      deskBtn.setAttribute('aria-label', deskBtn.title);
+    }
+
+    var mobBtn = document.getElementById('themeToggleBtnMob');
+    if (mobBtn) {
+      mobBtn.innerHTML = icon(t === 'dark' ? 'sun' : 'moon') + (t === 'dark' ? ' <span>Mode Terang</span>' : ' <span>Mode Gelap</span>');
+    }
+
+    setTimeout(function () {
+      document.documentElement.classList.remove('theme-transitioning');
+    }, 280);
   }
   function toggleTheme() {
     setTheme(getTheme() === 'dark' ? 'light' : 'dark');
@@ -263,16 +283,38 @@
 
   /* ---------- PWA Install Management ---------- */
   var deferredPwaPrompt = null;
+  var isPwaStandalone = (function () {
+    try {
+      return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    } catch (e) {
+      return false;
+    }
+  })();
+
+  function updatePwaInstallButtons() {
+    if (isPwaStandalone) {
+      $$('#pwaInstallBtn, #pwaInstallBtnMob').forEach(function (btn) {
+        btn.style.display = 'none';
+      });
+      return;
+    }
+    $$('#pwaInstallBtn').forEach(function (btn) {
+      btn.style.display = 'inline-flex';
+    });
+    $$('#pwaInstallBtnMob').forEach(function (btn) {
+      btn.style.display = 'flex';
+    });
+  }
+
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
     deferredPwaPrompt = e;
-    $$('#pwaInstallBtn, #pwaInstallBtnMob').forEach(function (btn) {
-      btn.style.display = 'inline-flex';
-    });
+    updatePwaInstallButtons();
   });
 
   window.addEventListener('appinstalled', function () {
     deferredPwaPrompt = null;
+    isPwaStandalone = true;
     $$('#pwaInstallBtn, #pwaInstallBtnMob').forEach(function (btn) {
       btn.style.display = 'none';
     });
@@ -291,9 +333,9 @@
     } else {
       var isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
       if (isIos) {
-        alert('Cara Install di iPhone / iPad:\n1. Ketuk tombol Bagikan (Share / ikon kotak panah ke atas) di bawah Safari.\n2. Gulir ke bawah lalu pilih "Tambahkan ke Layar Utama" (Add to Home Screen).\n3. Ketuk "Tambah" (Add) di kanan atas.');
+        alert('Cara Install Ardan Tools di iPhone / iPad:\n\n1. Ketuk tombol Bagikan (Share / ikon kotak panah ke atas) di bagian bawah Safari.\n2. Gulir ke bawah lalu pilih "Tambahkan ke Layar Utama" (Add to Home Screen).\n3. Ketuk "Tambah" (Add) di pojok kanan atas.\n\nAplikasi akan langsung muncul di layar utama dan siap dipakai offline!');
       } else {
-        alert('Cara Install di HP Android / Laptop:\n1. Buka menu browser (ikon titik tiga di kanan atas).\n2. Pilih "Instal aplikasi" atau "Tambahkan ke Layar Utama" (Add to Home screen).');
+        alert('Cara Install Ardan Tools di HP Android / Komputer:\n\n1. Buka menu browser (ikon titik tiga di kanan atas browser).\n2. Pilih "Instal aplikasi" atau "Tambahkan ke Layar Utama" (Add to Home screen).\n3. Konfirmasi "Instal".\n\nSetelah terpasang, Ardan Tools dapat dibuka langsung tanpa browser dan bekerja 100% offline tanpa internet!');
       }
     }
   }
@@ -722,6 +764,7 @@
   }
   function bindHeader() {
     updateHeaderScroll();
+    updatePwaInstallButtons();
     var mt = $('#menuToggle'), mn = $('#mobileNav');
     if (mt && mn) {
       mt.addEventListener('click', function (e) {

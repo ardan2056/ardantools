@@ -1,5 +1,5 @@
-/* ===== Ardan Tools — Service Worker (PWA & Offline Processing) ===== */
-const CACHE_NAME = 'ardan-cache-v2';
+/* ===== Ardan Tools — Service Worker (PWA & Offline Processing 100%) ===== */
+const CACHE_NAME = 'ardan-cache-v3';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -11,24 +11,35 @@ const PRECACHE_URLS = [
   '/js/app.js',
   '/js/tools-text.js',
   '/js/tools-media.js',
+  '/vendor/jszip.min.js',
+  '/vendor/marked.umd.js',
   '/vendor/pdf-lib.min.js',
+  '/vendor/pdf.min.mjs',
+  '/vendor/pdf.worker.min.mjs',
+  '/vendor/heic2any.min.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
-  '/icons/icon.svg'
+  '/icons/icon.svg',
+  '/icons/icon-192.svg',
+  '/icons/icon-512.svg'
 ];
 
-// Install: precache critical assets
+// Install: precache all critical assets, libraries & icons
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(PRECACHE_URLS).catch(err => {
-        console.warn('PWA precache warning:', err);
-      });
+      return Promise.allSettled(
+        PRECACHE_URLS.map(url =>
+          cache.add(url).catch(err => {
+            console.warn('Precache skip/warning for:', url, err);
+          })
+        )
+      );
     }).then(() => self.skipWaiting())
   );
 });
 
-// Activate: clean up outdated caches
+// Activate: clean up outdated caches immediately
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => {
@@ -39,15 +50,14 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch: Stale-While-Revalidate with offline fallback for navigation
+// Fetch: Stale-While-Revalidate with full offline fallback
 self.addEventListener('fetch', event => {
   const req = event.request;
-  const url = new URL(req.url);
-
-  // Only handle GET requests for same origin and static CDNs
   if (req.method !== 'GET') return;
 
-  // SPA Navigation: fallback to /index.html when offline
+  const url = new URL(req.url);
+
+  // SPA Navigation: fallback to cached /index.html when offline
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req).catch(() => {
@@ -57,7 +67,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Same origin assets: Stale-while-revalidate
+  // Same-origin assets: Cache-first / Stale-while-revalidate
   if (url.origin === self.location.origin) {
     event.respondWith(
       caches.match(req).then(cached => {
@@ -75,15 +85,22 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Google Fonts & External Assets: Cache first with network fallback
-  if (url.hostname.includes('fonts.googleapis.com') || url.hostname.includes('fonts.gstatic.com')) {
+  // External Fonts & CDN Scripts: Cache first with network fallback
+  if (
+    url.hostname.includes('fonts.googleapis.com') ||
+    url.hostname.includes('fonts.gstatic.com') ||
+    url.hostname.includes('cdn.jsdelivr.net') ||
+    url.hostname.includes('unpkg.com')
+  ) {
     event.respondWith(
       caches.match(req).then(cached => {
         return cached || fetch(req).then(networkRes => {
-          const clone = networkRes.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
+          if (networkRes && networkRes.status === 200) {
+            const clone = networkRes.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
+          }
           return networkRes;
-        }).catch(() => cached);
+        }).catch(() => cached || new Response('', { status: 408, statusText: 'Offline' }));
       })
     );
   }
