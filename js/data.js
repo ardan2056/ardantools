@@ -54,7 +54,7 @@ window.ADS = {
   }
 };
 
-window.POPULAR = ['pdf-to-word', 'file-translator', 'hd-photo-enhancer', 'pdf-compressor', 'qr-code-generator', 'jpg-to-pdf', 'video-to-mp3', 'auto-video-editor', 'word-counter', 'json-formatter'];
+window.POPULAR = ['audio-to-text', 'pdf-to-word', 'file-translator', 'hd-photo-enhancer', 'pdf-compressor', 'qr-code-generator', 'jpg-to-pdf', 'video-to-mp3', 'auto-video-editor', 'word-counter', 'json-formatter'];
 
 /* Tools — in the same order as the home page grid (Top 4 Featured Tools) */
 window.TOOLS = [
@@ -253,6 +253,44 @@ window.TOOLS = [
       ['Apakah ada batas durasi atau ukuran file video?', 'Tidak ada batasan ukuran file video (Unlimited MB/GB). Video besar sekalipun tetap bisa diproses di browser Anda.'],
       ['Format audio apa yang paling bagus?', 'Format WAV memberikan kualitas suara murni studio (Lossless PCM 16-bit) tanpa kompresi, sangat cocok untuk pemutar musik, HP, dan editing.'],
       ['Apakah perlu koneksi internet untuk mengekstrak?', 'Hanya saat pertama membuka halaman web. Setelah halaman terbuka (atau di-install via PWA), proses ekstraksi berjalan 100% offline tanpa internet!']
+    ]
+  },
+  {
+    slug: 'audio-to-text', name: 'Audio to Text Converter (Transkrip Suara ke Teks)', cat: 'video', label: 'Speech to Text', icon: 'mic', ad: 'privacy',
+    desc: 'Ubah suara rekaman, file audio (MP3, WAV, M4A, OGG), dan dikte mikrofon menjadi teks secara akurat 100% lokal di browser tanpa batas waktu.',
+    intro: 'Transkripsi file audio, rekaman suara, podcast, dan percakapan menjadi teks otomatis 100% di browser Anda. Mendukung rekam suara langsung (voice typing) dan transkrip file rekaman dengan penanda waktu (timestamps), ekspor Word (.docx), Subtitle (.srt), dan TXT tanpa server uploads.',
+    keywords: 'audio to text suara ke teks speech to text transkrip audio transkripsi rekaman voice to text dikte subtitle srt word gratis offline',
+    formats: ['MP3, WAV, M4A, OGG, WebM, AAC, FLAC', 'Video: MP4, MOV, MKV', 'Live Microphone'],
+    accept: 'audio/*,video/*,.mp3,.wav,.m4a,.ogg,.webm,.aac,.flac,.mp4,.mov,.mkv', maxFiles: 1,
+    dropTitle: 'Tarik & lepas file audio atau video di sini untuk ditranskripsi',
+    dropSub: 'Mendukung MP3, WAV, M4A, OGG, MP4 · Rekam Mikrofon Langsung · 100% Client-Side & Unlimited',
+    related: ['video-to-mp3', 'auto-video-editor', 'word-counter', 'file-translator'],
+    howto: [
+      ['Pilih Mode', 'Pilih "Rekam Suara Langsung" untuk dikte mikrofon real-time, atau "File Audio / Rekaman" untuk mentranskripsi file.'],
+      ['Pilih Bahasa', 'Tentukan bahasa audio (Bahasa Indonesia, English, dll.) lalu tekan tombol Mulai Transkripsi.'],
+      ['Salin atau Ekspor', 'Teks otomatis terketik secara real-time. Salin teks, atau unduh sebagai file TXT, Dokumen Word (.docx), atau Subtitle (.srt).']
+    ],
+    features: [
+      'Dual Mode: Rekam suara langsung via mikrofon (Voice Typing) & Transkripsi file rekaman audio/video',
+      'Mendukung Bahasa Indonesia (id-ID), English (en-US), Arab, Jepang, Korea, Mandarin, dan 10+ bahasa dunia',
+      'Penanda waktu otomatis (Timestamps) yang sinkron dengan pemutar audio bawaan',
+      'Ekspor multiformat lengkap: Teks (.txt), Dokumen Word (.docx), dan Subtitle Video (.srt)',
+      'Pemutar audio interaktif dengan kontrol kecepatan putar (0.75x, 1x, 1.25x, 1.5x) dan navigasi seek',
+      'Statistik teks real-time: Jumlah kata, karakter, durasi audio, dan estimasi waktu baca',
+      '100% Privasi Terjamin: Suara dan percakapan Anda tidak pernah diunggah atau disimpan ke server mana pun'
+    ],
+    privacy: 'Kerahasiaan audio Anda terjamin 100%. Pemrosesan rekaman dan suara berjalan langsung di browser perangkat Anda tanpa server retention.',
+    uses: [
+      'Membuat transkrip wawancara, notula rapat kantor, atau rekaman kuliah mahasiswa.',
+      'Dikte suara cepat (voice typing) untuk menulis artikel, buku, tugas, atau pesan panjang tanpa capek mengetik.',
+      'Membuat subtitle (.srt) otomatis untuk konten video YouTube, TikTok, dan reels.',
+      'Mendokumentasikan rekaman podcast, seminar, dan rekaman suara HP ke dalam bentuk naskah.'
+    ],
+    faq: [
+      ['Apakah bisa menggunakan mikrofon langsung?', 'Bisa! Cukup pilih mode "Rekam Suara Langsung", klik Mulai Merekam, dan mulailah berbicara. Kata-kata akan langsung terketik secara real-time.'],
+      ['Format file apa saja yang didukung?', 'Semua format audio dan video populer didukung: MP3, WAV, M4A, OGG, WebM, AAC, FLAC, hingga video MP4, MOV, dan MKV.'],
+      ['Apakah bisa diekspor jadi Word (.docx) dan Subtitle (.srt)?', 'Ya! Tersedia tombol 1-klik untuk mengunduh dokumen Word (.docx) rapi, file Subtitle (.srt) lengkap dengan timecode, maupun file teks biasa (.txt).'],
+      ['Apakah ada batas durasi audio?', 'Tidak ada batasan durasi! Anda bebas merekam atau memutar file audio berapa lama pun tanpa kuota dan tanpa biaya.']
     ]
   },
   {
@@ -720,4 +758,11 @@ if (window.TOOL_MAP['pdf-to-word']) {
   window.TOOL_MAP['pdf-ke-docx'] = window.TOOL_MAP['pdf-to-word'];
   window.TOOL_MAP['pdf2word'] = window.TOOL_MAP['pdf-to-word'];
   window.TOOL_MAP['pdf2docx'] = window.TOOL_MAP['pdf-to-word'];
+}
+if (window.TOOL_MAP['audio-to-text']) {
+  window.TOOL_MAP['audio-ke-teks'] = window.TOOL_MAP['audio-to-text'];
+  window.TOOL_MAP['speech-to-text'] = window.TOOL_MAP['audio-to-text'];
+  window.TOOL_MAP['suara-ke-teks'] = window.TOOL_MAP['audio-to-text'];
+  window.TOOL_MAP['transkrip-audio'] = window.TOOL_MAP['audio-to-text'];
+  window.TOOL_MAP['voice-to-text'] = window.TOOL_MAP['audio-to-text'];
 }

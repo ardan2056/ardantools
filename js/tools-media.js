@@ -3790,4 +3790,572 @@
       });
     }
   };
+
+  /* ---------------- Audio to Text Converter & Speech-to-Text ---------------- */
+  IMPL['audio-to-text'] = IMPL['audio-ke-teks'] = IMPL['speech-to-text'] = IMPL['suara-ke-teks'] = IMPL['transkrip-audio'] = IMPL['voice-to-text'] = function (root, t) {
+    var mode = 'mic'; // 'mic' or 'file'
+    var lang = 'id-ID';
+    var isRecording = false;
+    var recognition = null;
+    var audioFile = null;
+    var audioUrl = null;
+    var audioEl = null;
+    var audioDuration = 0;
+    var recordStartTime = 0;
+    var timerInterval = null;
+    var recordedSeconds = 0;
+
+    var segments = []; // [{ start: 0, end: 2.5, text: "..." }]
+    var includeTimestamps = true;
+    var autoCaps = true;
+
+    var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    var LANGS = [
+      { code: 'id-ID', name: 'Bahasa Indonesia' },
+      { code: 'en-US', name: 'English (US)' },
+      { code: 'en-GB', name: 'English (UK)' },
+      { code: 'ar-SA', name: 'العربية (Arabic)' },
+      { code: 'ja-JP', name: '日本語 (Japanese)' },
+      { code: 'ko-KR', name: '한국어 (Korean)' },
+      { code: 'zh-CN', name: '中文 (Mandarin)' },
+      { code: 'es-ES', name: 'Español (Spanish)' },
+      { code: 'fr-FR', name: 'Français (French)' },
+      { code: 'de-DE', name: 'Deutsch (German)' }
+    ];
+
+    root.innerHTML =
+      '<div class="toolbar" style="gap:16px;margin-bottom:18px;flex-wrap:wrap;align-items:flex-end" id="atToolbar">' +
+        '<div class="field">' +
+          '<label class="label">Mode Transkripsi</label>' +
+          '<div class="seg" id="atMode">' +
+            '<button class="active" data-m="mic">' + icon('mic', 'icon-sm') + ' Rekam Suara Langsung</button>' +
+            '<button data-m="file">' + icon('file', 'icon-sm') + ' File Audio / Rekaman</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="field">' +
+          '<label class="label">Bahasa Audio</label>' +
+          '<select class="input" id="atLang" style="height:38px;min-width:180px;font-size:13px">' +
+            LANGS.map(function (l) { return '<option value="' + l.code + '"' + (l.code === 'id-ID' ? ' selected' : '') + '>' + l.name + '</option>'; }).join('') +
+          '</select>' +
+        '</div>' +
+        '<div class="field" style="margin-left:auto;display:flex;align-items:center;gap:14px;padding-bottom:6px;flex-wrap:wrap">' +
+          '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="atOptTime" checked> Sertakan Waktu [00:00]</label>' +
+          '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="atOptCaps" checked> Huruf Kapital Otomatis</label>' +
+        '</div>' +
+      '</div>' +
+      '<div id="atWorkArea"></div>' +
+      '<div id="atResultArea" style="margin-top:20px"></div>';
+
+    function formatTime(s) {
+      if (!isFinite(s) || s < 0) s = 0;
+      var m = Math.floor(s / 60);
+      var sec = Math.floor(s % 60);
+      return (m < 10 ? '0' : '') + m + ':' + (sec < 10 ? '0' : '') + sec;
+    }
+
+    function formatSrtTime(sec) {
+      var h = Math.floor(sec / 3600);
+      var m = Math.floor((sec % 3600) / 60);
+      var s = Math.floor(sec % 60);
+      var ms = Math.floor((sec % 1) * 1000);
+      return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s + ',' + (ms < 100 ? (ms < 10 ? '00' : '0') : '') + ms;
+    }
+
+    function capitalize(str) {
+      return str.replace(/(^\s*|[.?!]\s+)([a-z])/g, function (m, p1, p2) { return p1 + p2.toUpperCase(); });
+    }
+
+    function getFormattedText() {
+      if (!segments.length) return '';
+      return segments.map(function (seg) {
+        var prefix = includeTimestamps ? '[' + formatTime(seg.start) + '] ' : '';
+        var txt = autoCaps ? capitalize(seg.text) : seg.text;
+        return prefix + txt;
+      }).join('\n');
+    }
+
+    function generateSrt() {
+      return segments.map(function (seg, idx) {
+        var end = Math.max(seg.end, seg.start + 1.2);
+        return (idx + 1) + '\n' + formatSrtTime(seg.start) + ' --> ' + formatSrtTime(end) + '\n' + seg.text + '\n';
+      }).join('\n');
+    }
+
+    function drawWorkArea() {
+      var wa = F.$('#atWorkArea', root);
+      if (!wa) return;
+
+      if (!SpeechRec) {
+        wa.innerHTML =
+          '<div style="background:rgba(239, 68, 68, 0.1);border:1px solid rgba(239, 68, 68, 0.3);padding:18px 20px;border-radius:12px;color:var(--text);display:flex;align-items:center;gap:12px">' +
+            '<div style="font-size:22px;color:#ef4444">' + icon('shield', 'icon-md') + '</div>' +
+            '<div><strong>Web Speech API Belum Tersedia:</strong> Browser Anda saat ini belum mendukung Speech Recognition. Untuk hasil transkripsi instan 100% lokal di browser, silakan buka Ardan Tools menggunakan <strong>Google Chrome</strong>, <strong>Microsoft Edge</strong>, atau browser berbasis Chromium.</div>' +
+          '</div>';
+        return;
+      }
+
+      if (mode === 'mic') {
+        wa.innerHTML =
+          '<div style="background:var(--card-bg, #fff);border:1px solid var(--border);border-radius:14px;padding:28px 24px;text-align:center;box-shadow:var(--shadow-sm)">' +
+            '<div style="display:flex;flex-direction:column;align-items:center;gap:14px">' +
+              '<div id="atWaveIndicator" style="display:' + (isRecording ? 'flex' : 'none') + ';align-items:center;gap:5px;height:32px">' +
+                '<span class="wave-bar" style="width:4px;height:12px;background:var(--primary, #6366f1);border-radius:3px;animation:atPulse 0.8s ease-in-out infinite"></span>' +
+                '<span class="wave-bar" style="width:4px;height:24px;background:var(--primary, #6366f1);border-radius:3px;animation:atPulse 0.6s ease-in-out infinite 0.1s"></span>' +
+                '<span class="wave-bar" style="width:4px;height:30px;background:#ef4444;border-radius:3px;animation:atPulse 0.5s ease-in-out infinite 0.2s"></span>' +
+                '<span class="wave-bar" style="width:4px;height:18px;background:var(--primary, #6366f1);border-radius:3px;animation:atPulse 0.7s ease-in-out infinite 0.3s"></span>' +
+                '<span class="wave-bar" style="width:4px;height:10px;background:var(--primary, #6366f1);border-radius:3px;animation:atPulse 0.9s ease-in-out infinite 0.4s"></span>' +
+              '</div>' +
+              '<div>' +
+                '<button class="btn btn-lg ' + (isRecording ? 'btn-danger' : 'btn-primary') + '" id="atRecordBtn" style="min-width:240px;height:48px;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:10px">' +
+                  icon(isRecording ? 'x' : 'mic', 'icon-md') +
+                  (isRecording ? 'Berhenti Merekam (' + formatTime(recordedSeconds) + ')' : 'Mulai Merekam Suara') +
+                '</button>' +
+              '</div>' +
+              '<div style="font-size:13px;color:var(--text-soft)">' +
+                (isRecording ? 'Sedang mendengarkan ucapan Anda... Bicaralah secara jelas ke mikrofon.' : 'Klik tombol di atas lalu mulailah berbicara. Ucapan Anda akan otomatis terketik secara real-time.') +
+              '</div>' +
+              '<div id="atInterim" style="font-size:14px;color:var(--primary, #6366f1);font-style:italic;min-height:22px;margin-top:4px"></div>' +
+            '</div>' +
+          '</div>';
+      } else {
+        // File mode
+        if (!audioFile) {
+          wa.innerHTML = '<div id="atDrop"></div>';
+          var drop = F.dropzone({
+            title: 'Pilih atau Tarik File Audio / Rekaman ke Sini',
+            sub: 'Mendukung MP3, WAV, M4A, OGG, WebM, AAC, FLAC, MP4, MOV · 100% In-Browser & Bebas Ukuran',
+            accept: 'audio/*,video/*,.mp3,.wav,.m4a,.ogg,.webm,.aac,.flac,.mp4,.mov,.mkv',
+            maxFiles: 1,
+            onFiles: function (files) { loadAudioFile(files[0]); }
+          });
+          F.$('#atDrop', wa).appendChild(drop);
+        } else {
+          wa.innerHTML =
+            fileRow(audioFile.name, '<span>' + F.formatBytes(audioFile.size) + '</span> · <span id="atFileDur">' + (audioDuration ? formatTime(audioDuration) : 'Memuat durasi...') + '</span>', '<button class="icon-btn danger" data-act="reset-file" title="Hapus File">' + icon('x', 'icon-sm') + '</button>', 'music') +
+            '<div style="background:var(--card-bg, #fff);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:14px;box-shadow:var(--shadow-sm)">' +
+              '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">' +
+                '<button class="btn btn-primary" id="atPlayBtn" style="min-width:130px;display:inline-flex;align-items:center;gap:8px">' +
+                  icon('play', 'icon-sm') + ' Putar Audio' +
+                '</button>' +
+                '<button class="btn ' + (isRecording ? 'btn-danger' : '') + '" id="atTranscribeFileBtn" style="display:inline-flex;align-items:center;gap:8px">' +
+                  icon(isRecording ? 'x' : 'mic', 'icon-sm') + (isRecording ? 'Hentikan Transkripsi' : 'Mulai Transkripsi Audio') +
+                '</button>' +
+                '<div style="font-size:13px;color:var(--text-soft);margin-left:auto" id="atPlayTime">00:00 / 00:00</div>' +
+              '</div>' +
+              '<input type="range" id="atSeek" min="0" max="100" value="0" style="width:100%;margin-top:14px;cursor:pointer">' +
+              '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--text-soft)">' +
+                '<span>Kecepatan:</span>' +
+                '<div class="seg seg-sm" id="atSpeed">' +
+                  ['0.75', '1', '1.25', '1.5'].map(function (s) { return '<button data-s="' + s + '"' + (s === '1' ? ' class="active"' : '') + '>' + s + 'x</button>'; }).join('') +
+                '</div>' +
+                '<div style="margin-left:auto;font-size:12px;color:var(--primary, #6366f1)" id="atFileInterim"></div>' +
+              '</div>' +
+            '</div>';
+          setupAudioEvents();
+        }
+      }
+
+      drawResultArea();
+    }
+
+    function setupAudioEvents() {
+      if (!audioUrl) return;
+      if (!audioEl) {
+        audioEl = new Audio(audioUrl);
+      } else if (audioEl.src !== audioUrl) {
+        audioEl.src = audioUrl;
+      }
+
+      audioEl.onloadedmetadata = function () {
+        audioDuration = audioEl.duration || 0;
+        var durEl = F.$('#atFileDur', root);
+        if (durEl) durEl.textContent = formatTime(audioDuration);
+        var pt = F.$('#atPlayTime', root);
+        if (pt) pt.textContent = formatTime(audioEl.currentTime) + ' / ' + formatTime(audioDuration);
+      };
+
+      audioEl.ontimeupdate = function () {
+        var seek = F.$('#atSeek', root);
+        var pt = F.$('#atPlayTime', root);
+        if (seek && audioDuration) {
+          seek.value = (audioEl.currentTime / audioDuration) * 100;
+        }
+        if (pt) {
+          pt.textContent = formatTime(audioEl.currentTime) + ' / ' + formatTime(audioDuration);
+        }
+      };
+
+      audioEl.onended = function () {
+        var pb = F.$('#atPlayBtn', root);
+        if (pb) pb.innerHTML = icon('play', 'icon-sm') + ' Putar Audio';
+        if (isRecording) stopRecording();
+      };
+    }
+
+    function drawResultArea() {
+      var res = F.$('#atResultArea', root);
+      if (!res) return;
+
+      var textVal = getFormattedText();
+      var words = textVal.trim() ? textVal.trim().split(/\s+/).length : 0;
+      var chars = textVal.length;
+      var readMin = Math.max(1, Math.ceil(words / 150));
+
+      res.innerHTML =
+        '<div style="background:var(--card-bg, #fff);border:1px solid var(--border);border-radius:14px;padding:22px;box-shadow:var(--shadow-sm)">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">' +
+            '<div style="font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px">' +
+              icon('type', 'icon-sm') + ' Hasil Transkripsi Teks' +
+              (isRecording ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;animation:atPulse 1s infinite"></span>' : '') +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+              '<button class="btn btn-sm" data-act="copy" title="Salin ke Clipboard">' + icon('copy', 'icon-xs') + ' Salin Teks</button>' +
+              '<button class="btn btn-sm" data-act="caps" title="Kapitalkan Awal Kalimat">' + icon('wand', 'icon-xs') + ' Rapikan</button>' +
+              '<button class="btn btn-sm danger" data-act="clear" title="Bersihkan Teks">' + icon('trash', 'icon-xs') + ' Bersihkan</button>' +
+            '</div>' +
+          '</div>' +
+          '<textarea class="input" id="atTextarea" rows="8" placeholder="Transkripsi teks ucapan akan muncul di sini secara real-time..." style="width:100%;font-size:14px;line-height:1.7;padding:14px;border-radius:10px;resize:vertical">' + esc(textVal) + '</textarea>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:10px;margin-top:16px">' +
+            '<div style="background:var(--bg-alt, rgba(0,0,0,0.02));padding:10px;border-radius:8px;border:1px solid var(--border);text-align:center">' +
+              '<div style="font-size:11px;color:var(--text-soft)">TOTAL KATA</div>' +
+              '<div style="font-size:18px;font-weight:700;color:var(--text);margin-top:2px" id="atStatWords">' + words + '</div>' +
+            '</div>' +
+            '<div style="background:var(--bg-alt, rgba(0,0,0,0.02));padding:10px;border-radius:8px;border:1px solid var(--border);text-align:center">' +
+              '<div style="font-size:11px;color:var(--text-soft)">KARAKTER</div>' +
+              '<div style="font-size:18px;font-weight:700;color:var(--text);margin-top:2px" id="atStatChars">' + chars + '</div>' +
+            '</div>' +
+            '<div style="background:var(--bg-alt, rgba(0,0,0,0.02));padding:10px;border-radius:8px;border:1px solid var(--border);text-align:center">' +
+              '<div style="font-size:11px;color:var(--text-soft)">WAKTU BACA</div>' +
+              '<div style="font-size:18px;font-weight:700;color:var(--text);margin-top:2px">~' + readMin + ' Menit</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="list-footer" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">' +
+            '<span class="summary">' + (words > 0 ? words + ' kata ditranskripsikan' : 'Siap merekam atau mentranskripsi audio') + '</span>' +
+            '<div class="toolbar">' +
+              '<button class="btn btn-sm" data-act="dl-txt"' + (words ? '' : ' disabled') + '>' + icon('download') + 'Unduh TXT</button>' +
+              '<button class="btn btn-sm" data-act="dl-srt"' + (words ? '' : ' disabled') + ' title="Format Subtitle Video">' + icon('film', 'icon-sm') + 'Unduh Subtitle (.SRT)</button>' +
+              '<button class="btn btn-primary" data-act="dl-docx"' + (words ? '' : ' disabled') + '>' + icon('file') + 'Unduh Dokumen Word (.docx)</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+
+      var ta = F.$('#atTextarea', root);
+      if (ta) {
+        ta.addEventListener('input', function () {
+          var lines = ta.value.split('\n').filter(Boolean);
+          segments = lines.map(function (ln, i) {
+            return { start: i * 3, end: (i + 1) * 3, text: ln.replace(/^\[\d+:\d+\]\s*/, '') };
+          });
+          var w = ta.value.trim() ? ta.value.trim().split(/\s+/).length : 0;
+          var c = ta.value.length;
+          var sw = F.$('#atStatWords', root);
+          var sc = F.$('#atStatChars', root);
+          if (sw) sw.textContent = w;
+          if (sc) sc.textContent = c;
+        });
+      }
+    }
+
+    function startRecording() {
+      if (!SpeechRec) {
+        F.toast('Browser tidak mendukung Speech Recognition.', 'error');
+        return;
+      }
+      try {
+        recognition = new SpeechRec();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = lang;
+
+        recordStartTime = Date.now();
+        recordedSeconds = 0;
+        isRecording = true;
+
+        timerInterval = setInterval(function () {
+          recordedSeconds++;
+          var rb = F.$('#atRecordBtn', root);
+          if (rb) rb.innerHTML = icon('x', 'icon-md') + ' Berhenti Merekam (' + formatTime(recordedSeconds) + ')';
+        }, 1000);
+
+        recognition.onstart = function () {
+          isRecording = true;
+          drawWorkArea();
+        };
+
+        recognition.onresult = function (event) {
+          var interimStr = '';
+          for (var i = event.resultIndex; i < event.results.length; ++i) {
+            var trans = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              var cleanText = trans.trim();
+              if (cleanText) {
+                var curSec = mode === 'file' && audioEl ? audioEl.currentTime : recordedSeconds;
+                segments.push({ start: curSec, end: curSec + 2.5, text: cleanText });
+                drawResultArea();
+              }
+            } else {
+              interimStr += trans;
+            }
+          }
+          var itEl = mode === 'mic' ? F.$('#atInterim', root) : F.$('#atFileInterim', root);
+          if (itEl) itEl.textContent = interimStr;
+        };
+
+        recognition.onerror = function (e) {
+          console.warn('SpeechRecognition error:', e);
+          if (e.error === 'not-allowed') {
+            F.toast('Izin mikrofon ditolak. Izinkan akses mikrofon di pengaturan browser.', 'error');
+            stopRecording();
+          } else if (e.error !== 'no-speech') {
+            F.toast('Peringatan mikrofon: ' + e.error, 'warning');
+          }
+        };
+
+        recognition.onend = function () {
+          if (isRecording) {
+            try { recognition.start(); } catch (_) {}
+          } else {
+            drawWorkArea();
+          }
+        };
+
+        recognition.start();
+        drawWorkArea();
+        F.toast('Mikrofon aktif! Mulailah berbicara...', 'success');
+      } catch (err) {
+        F.toast('Gagal mengaktifkan mikrofon: ' + err.message, 'error');
+        stopRecording();
+      }
+    }
+
+    function stopRecording() {
+      isRecording = false;
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+      if (recognition) {
+        try { recognition.stop(); } catch (_) {}
+        recognition = null;
+      }
+      drawWorkArea();
+      F.toast('Rekaman dihentikan. Hasil transkrip siap!', 'success');
+    }
+
+    function loadAudioFile(f) {
+      audioFile = f;
+      if (audioUrl) try { URL.revokeObjectURL(audioUrl); } catch (_) {}
+      audioUrl = URL.createObjectURL(f);
+      audioDuration = 0;
+      drawWorkArea();
+      F.toast('File audio berhasil dimuat!', 'success');
+    }
+
+    async function downloadWordDocx() {
+      var JSZip = await F.LIB.zip();
+      var zip = new JSZip();
+
+      var contentTypes =
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n' +
+        '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n' +
+        '  <Default Extension="xml" ContentType="application/xml"/>\n' +
+        '  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>\n' +
+        '  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>\n' +
+        '</Types>';
+
+      var pkgRels =
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+        '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>\n' +
+        '</Relationships>';
+
+      var docRels =
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+        '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>\n' +
+        '</Relationships>';
+
+      var stylesXml =
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">\n' +
+        '  <w:docDefaults>\n' +
+        '    <w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:rPrDefault>\n' +
+        '    <w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault>\n' +
+        '  </w:docDefaults>\n' +
+        '  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>\n' +
+        '  <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:rPr><w:b/><w:sz w:val="34"/><w:color w:val="1E3A8A"/></w:rPr></w:style>\n' +
+        '</w:styles>';
+
+      function cleanXml(s) { return String(s || '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, ''); }
+      function escXml(s) { return cleanXml(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;'); }
+
+      var titleText = audioFile ? 'Transkripsi Audio: ' + audioFile.name : 'Transkripsi Suara (Voice to Text)';
+      var dateStr = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+      var bodyXml =
+        '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>' + escXml(titleText) + '</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:rPr><w:i/><w:color w:val="6B7280"/></w:rPr><w:t>Dibuat melalui Ardan Tools pada ' + escXml(dateStr) + ' · Bahasa: ' + escXml(lang) + '</w:t></w:r></w:p>';
+
+      segments.forEach(function (seg) {
+        var prefix = includeTimestamps ? '[' + formatTime(seg.start) + '] ' : '';
+        var t = autoCaps ? capitalize(seg.text) : seg.text;
+        bodyXml += '<w:p><w:r><w:t xml:space="preserve">' + escXml(prefix + t) + '</w:t></w:r></w:p>';
+      });
+
+      bodyXml += '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>';
+
+      var documentXml =
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">\n' +
+        '  <w:body>' + bodyXml + '</w:body>\n' +
+        '</w:document>';
+
+      zip.file('[Content_Types].xml', contentTypes);
+      zip.file('_rels/.rels', pkgRels);
+      zip.file('word/_rels/document.xml.rels', docRels);
+      zip.file('word/styles.xml', stylesXml);
+      zip.file('word/document.xml', documentXml);
+
+      var docBlob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      var base = audioFile ? F.baseName(audioFile.name) : 'transkrip-suara';
+      F.download(docBlob, base + '-transkrip.docx');
+    }
+
+    // Click handler
+    root.addEventListener('click', function (e) {
+      var btn = e.target.closest('button');
+      if (!btn) return;
+
+      var m = btn.getAttribute('data-m');
+      if (m) {
+        if (isRecording) stopRecording();
+        F.$$('#atMode button', root).forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        mode = m;
+        drawWorkArea();
+        return;
+      }
+
+      var sp = btn.getAttribute('data-s');
+      if (sp && audioEl) {
+        F.$$('#atSpeed button', root).forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        audioEl.playbackRate = parseFloat(sp) || 1;
+        return;
+      }
+
+      if (btn.id === 'atRecordBtn') {
+        if (isRecording) stopRecording();
+        else startRecording();
+        return;
+      }
+
+      if (btn.id === 'atPlayBtn') {
+        if (!audioEl) return;
+        if (audioEl.paused) {
+          audioEl.play();
+          btn.innerHTML = icon('pause', 'icon-sm') + ' Jeda Audio';
+        } else {
+          audioEl.pause();
+          btn.innerHTML = icon('play', 'icon-sm') + ' Putar Audio';
+        }
+        return;
+      }
+
+      if (btn.id === 'atTranscribeFileBtn') {
+        if (!audioEl) return;
+        if (isRecording) {
+          stopRecording();
+          audioEl.pause();
+          var pb = F.$('#atPlayBtn', root);
+          if (pb) pb.innerHTML = icon('play', 'icon-sm') + ' Putar Audio';
+        } else {
+          audioEl.play();
+          var pb2 = F.$('#atPlayBtn', root);
+          if (pb2) pb2.innerHTML = icon('pause', 'icon-sm') + ' Jeda Audio';
+          startRecording();
+        }
+        return;
+      }
+
+      var act = btn.getAttribute('data-act');
+      if (act === 'reset-file') {
+        if (audioEl) { audioEl.pause(); audioEl = null; }
+        if (audioUrl) try { URL.revokeObjectURL(audioUrl); } catch (_) {}
+        audioFile = null;
+        audioUrl = null;
+        if (isRecording) stopRecording();
+        drawWorkArea();
+      } else if (act === 'copy') {
+        var txt = getFormattedText();
+        if (txt) {
+          F.copyText(txt).then(function () {
+            F.toast('Teks transkripsi berhasil disalin ke clipboard!', 'success');
+          });
+        }
+      } else if (act === 'clear') {
+        segments = [];
+        drawResultArea();
+        F.toast('Teks berhasil dibersihkan.', 'info');
+      } else if (act === 'caps') {
+        autoCaps = true;
+        drawResultArea();
+        F.toast('Kalimat berhasil dirapikan.', 'success');
+      } else if (act === 'dl-txt') {
+        var tStr = getFormattedText();
+        var blob = new Blob([tStr], { type: 'text/plain;charset=utf-8' });
+        var baseName = audioFile ? F.baseName(audioFile.name) : 'transkrip-suara';
+        F.download(blob, baseName + '-transkrip.txt');
+      } else if (act === 'dl-srt') {
+        var srtStr = generateSrt();
+        var srtBlob = new Blob([srtStr], { type: 'text/plain;charset=utf-8' });
+        var baseName2 = audioFile ? F.baseName(audioFile.name) : 'transkrip-subtitle';
+        F.download(srtBlob, baseName2 + '.srt');
+      } else if (act === 'dl-docx') {
+        downloadWordDocx();
+      }
+    });
+
+    var langSel = F.$('#atLang', root);
+    if (langSel) {
+      langSel.addEventListener('change', function () {
+        lang = langSel.value;
+        if (isRecording && recognition) {
+          recognition.lang = lang;
+        }
+      });
+    }
+
+    var timeCheck = F.$('#atOptTime', root);
+    if (timeCheck) {
+      timeCheck.addEventListener('change', function () {
+        includeTimestamps = !!timeCheck.checked;
+        drawResultArea();
+      });
+    }
+
+    var capsCheck = F.$('#atOptCaps', root);
+    if (capsCheck) {
+      capsCheck.addEventListener('change', function () {
+        autoCaps = !!capsCheck.checked;
+        drawResultArea();
+      });
+    }
+
+    var seekEl = F.$('#atSeek', root);
+    if (seekEl) {
+      seekEl.addEventListener('input', function () {
+        if (audioEl && audioDuration) {
+          audioEl.currentTime = (parseFloat(seekEl.value) / 100) * audioDuration;
+        }
+      });
+    }
+
+    drawWorkArea();
+
+    F.onCleanup(function () {
+      if (isRecording) stopRecording();
+      if (audioEl) { audioEl.pause(); audioEl = null; }
+      if (audioUrl) try { URL.revokeObjectURL(audioUrl); } catch (_) {}
+    });
+  };
 })();
